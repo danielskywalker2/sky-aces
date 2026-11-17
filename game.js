@@ -20,7 +20,7 @@ const TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in windo
 const keys = {}; let pressed = {};
 const ptr = { down: 0, id: -1, x: 0, y: 0, dx: 0, dy: 0, tx: 0 };
 addEventListener('keydown', e => {
-  if (!keys[e.code]) pressed[e.code] = 1; keys[e.code] = 1; audio();
+  if (!keys[e.code]) pressed[e.code] = 1; keys[e.code] = 1; if (e.isTrusted) unlockAudio();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => { keys[e.code] = 0; });
@@ -35,9 +35,29 @@ cv.addEventListener('pointermove', e => {
   ptr.dx += (e.clientX - ptr.x) / r.width * W; ptr.dy += (e.clientY - ptr.y) / r.height * H; ptr.x = e.clientX; ptr.y = e.clientY;
 });
 // 다른 손가락(화면 버튼 등)을 뗄 때 이동·사격이 끊기지 않도록 같은 포인터만 해제. iOS 는 손을 뗄 때 오디오가 풀린다.
-const ptrUp = e => { audio(); if (e.pointerId === ptr.id) ptr.down = 0; };
+const ptrUp = e => { unlockAudio(); if (e.pointerId === ptr.id) ptr.down = 0; };
 addEventListener('pointerup', ptrUp); addEventListener('pointercancel', ptrUp);
-addEventListener('touchend', () => audio());
+addEventListener('touchend', unlockAudio); addEventListener('click', unlockAudio);
+// ── iOS 소리 대책
+// 1) 무음 스위치를 켜 둬도 게임 소리가 나도록 오디오 세션을 '재생' 모드로 (iOS 17+)
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) {}
+// 2) iOS 는 손을 뗄 때(touchend/click)만 소리를 허락한다 → 그때 오디오를 깨우고 무음 버퍼를 한 번 재생
+// 3) iOS 16 이하는 audioSession 이 없으므로 무음 <audio> 를 반복 재생해 같은 효과를 낸다
+let audioPrimed = 0, silentEl = null;
+function unlockAudio() {
+  audio(); if (!AC) return;
+  if (AC.state !== 'running') AC.resume().catch(() => {});
+  if (!audioPrimed) { audioPrimed = 1; try { const s = AC.createBufferSource(); s.buffer = AC.createBuffer(1, 1, 22050); s.connect(AC.destination); s.start(0); } catch (_) {} }
+  if (!navigator.audioSession && !silentEl && /iP(hone|ad|od)|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document) {
+    const n = 800, b = new DataView(new ArrayBuffer(44 + n)), w = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    w(0, 'RIFF'); b.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, 8000, true); b.setUint32(28, 8000, true); b.setUint16(32, 1, true); b.setUint16(34, 8, true); w(36, 'data'); b.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) b.setUint8(44 + i, 128);
+    silentEl = new Audio(URL.createObjectURL(new Blob([b], { type: 'audio/wav' }))); silentEl.loop = true; silentEl.play().catch(() => { silentEl = null; });
+  }
+}
+// 홈 화면 앱에서 다른 앱 갔다 오면 오디오가 '중단' 상태가 되므로 돌아올 때 다시 깨운다
+document.addEventListener('visibilitychange', () => { if (!document.hidden && AC && AC.state !== 'running') AC.resume().catch(() => {}); });
 cv.addEventListener('contextmenu', e => { e.preventDefault(); pressed.KeyX = 1; });
 const hit = (...c) => c.some(k => pressed[k]);
 const held = (...c) => c.some(k => keys[k]);
@@ -45,7 +65,7 @@ const held = (...c) => c.some(k => keys[k]);
 // ───────────────────────── 사운드 (WebAudio 합성: 컴프레서·리버브·딜레이·디스토션·스테레오 패닝)
 let AC = null, master, sfxBus, musBus, boomBus, revSend, delSend, noiseBuf, eng = null, muted = false, song = null, songStep = 0, songT = 0, songTr = 0;
 function audio() {
-  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  if (AC) { if (AC.state !== 'running') AC.resume().catch(() => {}); return; }
   try {
     AC = new (window.AudioContext || window.webkitAudioContext)(); const sr = AC.sampleRate;
     const comp = AC.createDynamicsCompressor(); comp.threshold.value = -15; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = .003; comp.release.value = .2;
