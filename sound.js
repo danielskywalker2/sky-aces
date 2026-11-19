@@ -58,19 +58,20 @@ const S44 = 44100, S32 = 32000, S22 = 22050;
 function gun(seed, o) {
   const sr = S44, d = o.dur || .42, L = buf(d, sr), R = buf(d, sr), r = rng(seed), n = L.length;
   const hp = new BQ('hp', 1800, .7, sr), b1 = new BQ('bp', o.f * (.9 + r() * .2), 1.1, sr), b2 = new BQ('bp', o.f * 2.3, 2, sr), mc = new BQ('bp', 4200 + r() * 900, 6, sr), dk = new BQ('lp', o.lp || 16000, .7, sr);
-  const pm = [2300, 3650, 5200].map(f => f * (.94 + r() * .12)); let ph = 0;
+  const pm = [2300, 3650, 5200].map(f => f * (.94 + r() * .12)); let ph = 0, pz = 0;
   for (let i = 0; i < n; i++) {
     const t = i / sr, w = r() * 2 - 1; let x = 0;
     if (t < .005) x += hp.p(w) * (1 - t / .005) * 1.6;
     x += (b1.p(w) * 1.4 + b2.p(w) * .6) * Math.exp(-t / (o.bt || .03));
     ph += TAU * ((o.th || 110) * Math.exp(-t / .03) + 40) / sr; x += Math.sin(ph) * Math.exp(-t / (o.tt || .045)) * (o.tw || .9);
+    if (o.zip) { pz += TAU * (1300 + 2600 * Math.exp(-t / .015)) / sr; x += Math.sin(pz) * Math.exp(-t / .025) * o.zip; }
     const tm = t - .011; if (tm > 0 && o.mech !== 0) { const e = Math.exp(-tm / .01); for (const f of pm) x += Math.sin(TAU * f * tm) * e * .06; x += mc.p(w) * Math.exp(-tm / .008) * .45; }
     L[i] = R[i] = dk.p(sat(x, 1.8));
   }
   reverb(L, R, sr, o.rev || .16, .72, .5); return fadeEnds(norm([L, R], .9), sr);
 }
 function explosion(seed, size) {
-  const P = [{ d: 1.2, f0: 95, lt: .13, rc: 3400, rt: .22, deb: 7, rev: .24 }, { d: 2.3, f0: 76, lt: .3, rc: 2500, rt: .55, deb: 20, rev: .3 }, { d: 4.2, f0: 58, lt: .65, rc: 1900, rt: 1.25, deb: 48, rev: .4 }][size];
+  const P = [{ d: .75, f0: 105, lt: .085, rc: 3800, rt: .12, deb: 5, rev: .07 }, { d: 1.35, f0: 82, lt: .17, rc: 3000, rt: .27, deb: 12, rev: .1 }, { d: 2.4, f0: 62, lt: .34, rc: 2300, rt: .6, deb: 26, rev: .16 }][size];
   const sr = S44, L = buf(P.d, sr), R = buf(P.d, sr), n = L.length, r = rng(seed);
   const hp = new BQ('hp', 700, .7, sr), fl = new BQ('lp', P.rc, .6, sr), fr = new BQ('lp', P.rc, .6, sr), tb = vnoise(r, 14, sr, n), tb2 = vnoise(r, 3, sr, n);
   let ph = 0, bl = 0, br = 0;
@@ -92,7 +93,7 @@ function explosion(seed, size) {
     for (let i = 0; i < len && t0 + i < n; i++) { const v = f.p(r() * 2 - 1) * a * Math.exp(-i / len * 4); L[t0 + i] += v * (1 - pan) * 1.4; R[t0 + i] += v * pan * 1.4; }
   }
   for (let i = 0; i < n; i++) { L[i] = sat(L[i], 1.3); R[i] = sat(R[i], 1.3); }
-  reverb(L, R, sr, P.rev, .88, .6); return fadeEnds(norm([L, R], .95), sr, .001, .3);
+  reverb(L, R, sr, P.rev, .75, .6); return fadeEnds(norm([L, R], .95), sr, .001, .15);
 }
 function tink(seed, ric) {
   const sr = S44, d = ric ? .5 : .18, L = buf(d, sr), R = buf(d, sr), r = rng(seed), hp = new BQ('hp', 3000, .7, sr);
@@ -319,11 +320,43 @@ function cymbal(seed) {
   return norm([L, R], .7);
 }
 
+// ───────── 현대식 신스·드럼 (액션 음악용) — 기준음: 베이스 C2(36), 리드·패드 C4(60), 플럭 C5(72)
+function synBass(seed) { const sr = S32, d = .55, L = buf(d, sr), r = rng(seed), f0 = 65.41, lp = new BQ('lp', 2400, 2.5, sr); const vs = [-9, 9].map(c => ({ k: Math.pow(2, c / 1200), p: r() })); let ps = 0;
+  for (let i = 0; i < L.length; i++) { const t = i / sr; if ((i & 15) === 0) lp.set(260 + 2600 * Math.exp(-t / .06)); let x = 0; for (const v of vs) { v.p += f0 * v.k / sr; x += rd(TBL.s28, v.p); } ps += f0 / sr; L[i] = sat((lp.p(x * .6) + Math.sin(TAU * ps) * .55) * Math.min(1, t / .003) * Math.exp(-t / .3), 1.6); }
+  return fadeEnds(norm([L, L.slice()], .9), sr); }
+function synLead(seed) { const sr = S32, d = 1.3, L = buf(d, sr), R = buf(d, sr), r = rng(seed), f0 = 261.63, l1 = new BQ('lp', 5200, .9, sr), l2 = new BQ('lp', 5200, .9, sr); const vs = [-14, -6, 0, 6, 14].map((c, j) => ({ k: Math.pow(2, c / 1200), p: r(), s: j % 2 })); let vb = 0;
+  for (let i = 0; i < L.length; i++) { const t = i / sr, vib = 1 + (t > .18 ? .003 * Math.sin(vb += TAU * 6 / sr) : 0); let a = 0, b = 0; for (const v of vs) { v.p += f0 * v.k * vib / sr; const x = rd(TBL.s28, v.p); if (v.s) a += x; else b += x; } const e = Math.min(1, t / .004) * (.75 + .25 * Math.exp(-t / .08)) * Math.min(1, (d - t) / .15); L[i] = l1.p(a * .45 + b * .2) * e; R[i] = l2.p(b * .45 + a * .2) * e; }
+  return norm([L, R], .8); }
+function synPluck(seed) { const sr = S32, d = .32, L = buf(d, sr), r = rng(seed), f0 = 523.25, lp = new BQ('lp', 6000, 1.5, sr); let p = r();
+  for (let i = 0; i < L.length; i++) { const t = i / sr; if ((i & 15) === 0) lp.set(900 + 6000 * Math.exp(-t / .04)); p += f0 / sr; L[i] = lp.p(rd(TBL.s14, p)) * Math.min(1, t / .002) * Math.exp(-t / .09); }
+  const R = L.slice(); return fadeEnds(norm([L, R], .75), sr); }
+function synPad(seed) { const sr = S32, d = 2.6, L = buf(d, sr), R = buf(d, sr), r = rng(seed), f0 = 261.63, l1 = new BQ('lp', 2200, .7, sr), l2 = new BQ('lp', 2200, .7, sr); const vs = []; for (let k = 0; k < 7; k++) vs.push({ k: Math.pow(2, (r() * 30 - 15) / 1200), p: r(), s: k % 2 });
+  for (let i = 0; i < L.length; i++) { const t = i / sr; let a = 0, b = 0; for (const v of vs) { v.p += f0 * v.k / sr; const x = rd(TBL.s28, v.p); if (v.s) a += x; else b += x; } const e = Math.min(1, t / .06) * Math.min(1, (d - t) / .4); L[i] = l1.p(a / 3) * e; R[i] = l2.p(b / 3) * e; }
+  return norm([L, R], .7); }
+function kick(seed) { const sr = S44, d = .42, L = buf(d, sr), r = rng(seed); let ph = 0;
+  for (let i = 0; i < L.length; i++) { const t = i / sr; ph += TAU * (46 + 130 * Math.exp(-t / .035)) / sr; L[i] = sat(Math.sin(ph) * Math.exp(-t / .2) * 1.6 + (t < .004 ? (r() * 2 - 1) * (1 - t / .004) * .7 : 0), 1.8); }
+  return fadeEnds(norm([L, L.slice()], .95), sr); }
+function snare2(seed) { const sr = S44, d = .28, L = buf(d, sr), r = rng(seed), hp = new BQ('hp', 1100, .7, sr), bp = new BQ('bp', 3800, .6, sr); let ph = 0;
+  for (let i = 0; i < L.length; i++) { const t = i / sr, w = r() * 2 - 1; ph += TAU * (190 + 60 * Math.exp(-t / .01)) / sr; L[i] = Math.sin(ph) * Math.exp(-t / .045) * .8 + (hp.p(w) * .7 + bp.p(w) * .6) * Math.exp(-t / .085); }
+  const R = L.slice(); reverb(L, R, sr, .06, .6, .5); return fadeEnds(norm([L, R], .9), sr); }
+function clap(seed) { const sr = S44, d = .3, L = buf(d, sr), r = rng(seed), bp = new BQ('bp', 1500, .9, sr);
+  for (let i = 0; i < L.length; i++) { const t = i / sr; let e = 0; for (const t0 of [0, .011, .022]) if (t >= t0) e = Math.max(e, Math.exp(-(t - t0) / (t0 === .022 ? .09 : .006))); L[i] = bp.p(r() * 2 - 1) * e; }
+  const R = L.slice(); reverb(L, R, sr, .1, .6, .5); return fadeEnds(norm([L, R], .85), sr); }
+function hat(seed, open) { const sr = S44, d = open ? .35 : .07, L = buf(d, sr), r = rng(seed), hp = new BQ('hp', 7500, .8, sr), fs = [205.3, 304.4, 369.6, 522.7, 540, 800];
+  for (let i = 0; i < L.length; i++) { const t = i / sr; let m = 0; for (const f of fs) m += Math.sin(TAU * f * 8.2 * t) > 0 ? 1 : -1; L[i] = hp.p((r() * 2 - 1) * .7 + m * .08) * Math.exp(-t / (open ? .12 : .018)); }
+  return fadeEnds(norm([L, L.slice()], .7), sr); }
+// 경보: 빠르게 반복되는 디지털 경고음 + 저음 강하 (보스 경고)
+function alarm() { const sr = S32, d = 2, L = buf(d, sr); let p = 0, ps = 0;
+  for (let i = 0; i < L.length; i++) { const t = i / sr, k = Math.floor(t / .25), on = (t % .25) < .19, f = k % 2 ? 660 : 880; p += f / sr; ps += (55 + 30 * Math.exp(-t / .5)) / sr;
+    L[i] = (on ? sat(((p % 1) < .5 ? .5 : -.5) + Math.sin(TAU * 2 * p) * .2, 2) * .45 * Math.min(1, (t % .25) / .004, (.19 - (t % .25)) / .01) : 0) + Math.sin(TAU * ps) * .35 * Math.min(1, t / .05) * Math.min(1, (d - t) / .3); }
+  const R = L.slice(); reverb(L, R, sr, .1, .7, .5); return norm([L, R], .85); }
+function blip(seed, f = 1600, d = .07) { const sr = S44, L = buf(d, sr); for (let i = 0; i < L.length; i++) { const t = i / sr; L[i] = (Math.sin(TAU * f * t) + Math.sin(TAU * f * 2 * t) * .3) * Math.min(1, t / .002) * Math.exp(-t / (d * .35)); } return fadeEnds(norm([L, L.slice()], .6), sr); }
+
 // ───────── 샘플 목록 (이름 → 변형 여러 개)
 const DEFS = {
-  gun: [1, 2, 3, 4].map(s => () => gun(s, { f: 650, th: 115, bt: .028 })),
-  egun: [5, 6, 7].map(s => () => gun(s, { f: 950, th: 170, bt: .02, tw: .5, lp: 3800, rev: .3, mech: 0, dur: .4 })),
-  cannon: [8, 9].map(s => () => gun(s, { f: 380, th: 75, bt: .07, tt: .12, tw: 1.3, dur: 1.3, rev: .32 })),
+  gun: [1, 2, 3, 4].map(s => () => gun(s, { f: 900, th: 150, bt: .014, tt: .028, tw: 1, zip: .28, mech: 0, rev: .03, dur: .17 })),
+  egun: [5, 6, 7].map(s => () => gun(s, { f: 1300, th: 220, bt: .012, tt: .02, tw: .45, zip: .35, lp: 5200, rev: .06, mech: 0, dur: .16 })),
+  cannon: [8, 9].map(s => () => gun(s, { f: 420, th: 90, bt: .045, tt: .09, tw: 1.4, zip: .3, dur: .7, rev: .1 })),
   boomS: [11, 12, 13].map(s => () => explosion(s, 0)),
   boomM: [21, 22, 23].map(s => () => explosion(s, 1)),
   boomL: [31, 32].map(s => () => explosion(s, 2)),
@@ -346,12 +379,15 @@ const DEFS = {
   spin: [() => spinUp(161)], dive: [() => dive(162)], shimmer: [() => shimmer(171)],
   i_brass: [() => brass(201)], i_strings: [() => strings(202)], i_cello: [() => cello(203)], i_timp: [() => timpani(204)],
   i_snare: [205, 206, 207].map(s => () => snare(s)), i_bd: [() => bassDrum(208)], i_cym: [() => cymbal(209)],
+  m_bass: [() => synBass(301)], m_lead: [() => synLead(302)], m_pluck: [() => synPluck(303)], m_pad: [() => synPad(304)],
+  m_kick: [() => kick(305)], m_snare: [306, 307].map(s => () => snare2(s)), m_clap: [() => clap(308)], m_hat: [309, 310].map(s => () => hat(s, 0)), m_ohat: [() => hat(311, 1)],
+  alarm: [() => alarm()], blip: [() => blip(320, 1600)], blip2: [() => blip(321, 2400, .09)],
 };
-const SRATE = { engine: S32, jet: S32, jstart: S32, flyby: S32, siren: S32, drone: S32, start: S32, spin: S32, dive: S32, thunder: S22, rOn: S22, rOff: S22, rStatic: S22, i_brass: S32, i_strings: S32, i_cello: S32, i_timp: S32, i_bd: S32, i_cym: S32 };
+const SRATE = { m_bass: S32, m_lead: S32, m_pluck: S32, m_pad: S32, alarm: S32, engine: S32, jet: S32, jstart: S32, flyby: S32, siren: S32, drone: S32, start: S32, spin: S32, dive: S32, thunder: S22, rOn: S22, rOff: S22, rStatic: S22, i_brass: S32, i_strings: S32, i_cello: S32, i_timp: S32, i_bd: S32, i_cym: S32 };
 const RAW = {}; // 이름 → [[L,R], ...]
 let rendered = false;
 // 로딩 직후 백그라운드에서 조금씩 렌더 (화면이 멈추지 않게)
-const order = ['sw', 'i_brass', 'i_strings', 'i_cello', 'i_timp', 'i_snare', 'i_cym', 'amb_ocean', 'gun', 'boomS', 'tink', 'egun', 'boomM', 'jet', 'jstart', 'rOn', 'rOff', 'type', 'ping', 'i_bd', 'boomL', 'clank', 'cannon', 'siren', 'drone', 'flyby', 'whoosh', 'spin', 'dive', 'shimmer', 'coin', 'coin2', 'rStatic', 'amb_desert', 'amb_arctic', 'amb_storm', 'amb_fortress', 'thunder'];
+const order = ['blip', 'blip2', 'm_kick', 'm_hat', 'm_snare', 'm_bass', 'm_pluck', 'm_pad', 'm_lead', 'm_ohat', 'm_clap', 'i_cym', 'amb_ocean', 'gun', 'boomS', 'tink', 'egun', 'boomM', 'jet', 'jstart', 'rOn', 'rOff', 'type', 'ping', 'i_bd', 'boomL', 'clank', 'cannon', 'alarm', 'drone', 'sw', 'i_timp', 'flyby', 'whoosh', 'spin', 'dive', 'shimmer', 'coin', 'coin2', 'rStatic', 'amb_desert', 'amb_arctic', 'amb_storm', 'amb_fortress', 'thunder'];
 const queue = []; for (const k of order) DEFS[k].forEach((f, i) => queue.push([k, i, f]));
 function pump() {
   const t0 = performance.now();
@@ -361,7 +397,7 @@ function pump() {
 setTimeout(pump, 30);
 
 // ───────── 실시간 재생
-let AC = null, meter = null, master, limiter, sfxBus, musBus, musWet, ambBus, engBus, radBus, muted = false;
+let AC = null, meter = null, sideBus = null, master, limiter, sfxBus, musBus, musWet, ambBus, engBus, radBus, muted = false;
 const BUF = {};
 function toBuffers(k) {
   if (!RAW[k]) return; const sr = SRATE[k] || (k.startsWith('amb_') ? S22 : S44);
@@ -380,8 +416,9 @@ function unlock() {
     master = AC.createGain(); master.gain.value = muted ? 0 : .9; master.connect(limiter); limiter.connect(AC.destination);
     meter = AC.createAnalyser(); meter.fftSize = 2048; limiter.connect(meter); // 출력 레벨 측정용 (디버그)
     sfxBus = AC.createGain(); sfxBus.gain.value = .85; sfxBus.connect(master);
-    musBus = AC.createGain(); musBus.gain.value = .42; musBus.connect(master);
-    const conv = AC.createConvolver(); conv.buffer = hallIR(); musWet = AC.createGain(); musWet.gain.value = .35; musBus.connect(musWet); musWet.connect(conv); conv.connect(master);
+    musBus = AC.createGain(); musBus.gain.value = .5; musBus.connect(master);
+    sideBus = AC.createGain(); sideBus.gain.value = 1; sideBus.connect(musBus);
+    const conv = AC.createConvolver(); conv.buffer = hallIR(); musWet = AC.createGain(); musWet.gain.value = .12; musBus.connect(musWet); musWet.connect(conv); conv.connect(master);
     ambBus = AC.createGain(); ambBus.gain.value = .0; ambBus.connect(master);
     engBus = AC.createGain(); engBus.gain.value = 0; engBus.connect(master);
     radBus = AC.createGain(); radBus.gain.value = .5; radBus.connect(master);
@@ -416,22 +453,22 @@ function play(name, o = {}) {
   if (lim) active[name].push(end);
   return { s, g };
 }
-function duck(amt, hold = .25) { if (!AC) return; const t = AC.currentTime; for (const [b, v] of [[musBus, .42], [ambBus, null]]) { const cur = b.gain.value; b.gain.cancelScheduledValues(t); b.gain.setValueAtTime(cur, t); b.gain.linearRampToValueAtTime(cur * amt, t + .03); if (v != null) b.gain.setTargetAtTime(v, t + hold, .6); } ambDuck = t + hold; }
+function duck(amt, hold = .25) { if (!AC) return; const t = AC.currentTime; for (const [b, v] of [[musBus, .5], [ambBus, null]]) { const cur = b.gain.value; b.gain.cancelScheduledValues(t); b.gain.setValueAtTime(cur, t); b.gain.linearRampToValueAtTime(cur * amt, t + .03); if (v != null) b.gain.setTargetAtTime(v, t + hold, .6); } ambDuck = t + hold; }
 let ambDuck = 0;
 
 // ───────── 효과음 (게임에서 부르는 이름 그대로)
 let lastBoom = 0, lastWarn = -9, lastTick = 0;
 const F = () => AC ? AC.currentTime : 0;
 const SFX = {
-  shot: () => play('gun', { vol: .42, jit: .1, pan: (LP.x / W - .5) * .6 }),
+  shot: () => play('gun', { vol: .4, jit: .12, pan: (LP.x / W - .5) * .6 }),
   sub: () => play('whoosh', { vol: .22, pan: (LP.x / W - .5) * .6 }),
   tick: (x, y) => { if (F() - lastTick < .045) return; lastTick = F(); play('tink', { x, y, vol: .28, jit: .25 }); },
   eshot: (x, y) => play('egun', { x, y, vol: .3, jit: .15 }),
   boom: (x, y) => { if (F() - lastBoom < .04) return; lastBoom = F(); play('boomS', { x, y, vol: .6, jit: .14 }); },
-  mid: (x, y) => { play('boomM', { x, y, vol: .85 }); duck(.7); },
-  big: (x, y) => { play('boomL', { x, y, vol: 1, jit: .05 }); play('boomM', { x, y, vol: .5, when: .12 }); duck(.45, .6); },
-  power: () => { play('clank', { vol: .35, rate: 1.8 }); play('clank', { vol: .3, rate: 2.2, when: .11 }); play('ping', { vol: .35, rate: 1, when: .2 }); play('ping', { vol: .3, rate: 1.26, when: .3 }); play('ping', { vol: .28, rate: 1.5, when: .4 }); },
-  item: () => { play('clank', { vol: .4, rate: 1.4 }); play('sw', { vol: .5, when: .1 }); },
+  mid: (x, y) => { play('boomM', { x, y, vol: .85 }); duck(.82, .15); },
+  big: (x, y) => { play('boomL', { x, y, vol: 1, jit: .05 }); play('m_kick', { vol: .9, rate: .7 }); play('boomM', { x, y, vol: .45, when: .1 }); duck(.6, .3); },
+  power: () => { [0, 4, 7, 12].forEach((n, i) => play('m_pluck', { vol: .35, rate: Math.pow(2, n / 12), when: i * .05, jit: 0 })); play('whoosh', { vol: .25, rate: 1.6 }); play('blip2', { vol: .3, when: .2 }); },
+  item: () => { play('blip', { vol: .45 }); play('blip2', { vol: .4, when: .06 }); play('clank', { vol: .25, rate: 1.6 }); },
   gold: () => { play('coin', { vol: .4 }); play('coin2', { vol: .35, when: .07 }); },
   bomb: ty => {
     duck(.4, 1.5);
@@ -443,15 +480,15 @@ const SFX = {
   charge: () => { play('cannon', { vol: .9 }); play('whoosh', { vol: .4, rate: .7 }); duck(.7); },
   die: () => { play('boomL', { x: LP.x, y: LP.y, vol: 1 }); play('dive', { vol: .5, pan: (LP.x / W - .5) }); play('clank', { vol: .5, rate: .7 }); duck(.35, 1); },
   hit: () => { play('clank', { vol: .6, jit: .2 }); play('tink', { vol: .3, rate: .8 }); },
-  warn: () => { if (F() - lastWarn < 3.2) return; lastWarn = F(); play('siren', { vol: .55, jit: 0 }); duck(.5, 3); },
-  bossIn: () => { play('drone', { vol: .9, jit: 0 }); play('boomM', { vol: .5, when: 3.2, rate: .7 }); },
+  warn: () => { if (F() - lastWarn < 1.9) return; lastWarn = F(); play('alarm', { vol: .5, jit: 0 }); },
+  bossIn: () => { play('drone', { vol: .7, jit: 0, rate: 1.3 }); play('m_kick', { vol: 1, when: 2.6, rate: .6 }); play('i_cym', { vol: .4, when: 2.6 }); },
   cancel: () => play('shimmer', { vol: .35 }),
-  ok: () => { play('sw', { vol: .6 }); play('ping', { vol: .18, rate: 1.5 }); },
-  sel: () => play('sw', { vol: .45, jit: .1 }),
-  start: () => { play('jstart', { vol: .75, jit: 0 }); play('sw', { vol: .6 }); },
-  ext: () => { fanfare([[72, 0, .16], [76, .16, .16], [79, .32, .16], [84, .48, .7]], .5); play('ping', { vol: .3, rate: 1.5, when: .48 }); },
-  clear: () => { fanfare([[72, 0, .14], [72, .16, .14], [72, .32, .14], [76, .48, .3], [79, .8, .3], [76, 1.12, .14], [79, 1.28, .14], [84, 1.44, 1.3]], .55); inst('i_timp', 36, 1.44, 1.6, .5); inst('i_cym', 60, 1.44, 2.5, .3); [60, 64, 67].forEach(n => inst('i_strings', n, 1.44, 2.2, .2)); },
-  over: () => { [[64, 0, .5], [60, .5, .5], [57, 1, .5], [53, 1.5, .5], [52, 2, 2]].forEach(([n, t, d]) => { inst('i_brass', n - 12, t, d, .4); inst('i_cello', n - 24, t, d, .4); }); [40, 47, 52].forEach(n => inst('i_strings', n, 2, 2.4, .2)); inst('i_timp', 28, 2, 2.2, .5); },
+  ok: () => { play('blip', { vol: .5 }); play('blip2', { vol: .45, when: .07 }); },
+  sel: () => play('blip', { vol: .4, jit: .05 }),
+  start: () => { play('jstart', { vol: .7, jit: 0 }); play('blip2', { vol: .5 }); play('m_kick', { vol: .8, when: .8 }); },
+  ext: () => { stinger([[72, 0, .12], [76, .12, .12], [79, .24, .12], [84, .36, .5]], .32); play('blip2', { vol: .3, when: .36 }); },
+  clear: () => { stinger([[72, 0, .12], [72, .14, .12], [72, .28, .12], [76, .42, .25], [79, .7, .25], [76, .98, .12], [79, 1.12, .12], [84, 1.26, 1.1]], .34); drum('i_cym', 1.26, .4); drum('m_kick', 1.26, .9); [60, 64, 67].forEach(n => inst('m_pad', n, 1.26, 1.8, .14)); },
+  over: () => { [[64, 0, .45], [60, .5, .45], [57, 1, .45], [53, 1.5, .45], [52, 2, 1.8]].forEach(([n, t, d]) => { inst('m_lead', n - 12, t, d, .22); inst('m_bass', n - 24, t, d, .35); }); [40, 47, 52].forEach(n => inst('m_pad', n + 12, 2, 2.2, .14)); drum('m_kick', 2, .7); },
   // 새 효과음
   flyby: x => play('flyby', { x, dist: false, vol: .38, jit: .12, pan: Math.max(-1, Math.min(1, (x / W - .5) * 1.2)) }),
   // 무전: 켜짐 소리 + 정해진 시간만큼 배경 잡음 (스스로 멈추므로 잡음이 남지 않음)
@@ -464,25 +501,27 @@ const SFX = {
 // 진행 중인 무전 잡음 (음소거·화면 전환 때 끄기)
 const radioLive = [];
 function radioStatic(on) { if (on || !AC) return; const t = AC.currentTime; while (radioLive.length) { const v = radioLive.pop(); try { v.g.gain.cancelScheduledValues(t); v.g.gain.setTargetAtTime(0, t, .04); v.s.stop(t + .2); } catch (_) {} } }
-const NF = n => Math.pow(2, (n - 60) / 12);
-function inst(name, midi, when, dur, vol, pan = 0) {
-  const base = name === 'i_cello' || name === 'i_timp' ? 36 : 60;
-  return play(name, { bus: musBus, rate: Math.pow(2, (midi - base) / 12), when, dur, vol, pan, jit: name === 'i_snare' ? .04 : 0, rel: name === 'i_strings' ? .4 : name === 'i_brass' ? .12 : .06 });
+const BASE = { m_bass: 36, m_lead: 60, m_pad: 60, m_pluck: 72, i_timp: 36, i_cello: 36 };
+function inst(name, midi, when, dur, vol, pan = 0, bus) {
+  return play(name, { bus: bus || musBus, rate: Math.pow(2, (midi - (BASE[name] ?? 60)) / 12), when, dur, vol, pan, jit: 0, rel: name === 'm_pad' ? .3 : .04 });
 }
-function fanfare(notes, vol) { for (const [n, t, d] of notes) { inst('i_brass', n - 12, t, d + .05, vol); inst('i_brass', n - 24, t, d + .05, vol * .5); inst('i_cello', n - 36, t, Math.min(d, .4), vol * .6); } inst('i_snare', 60, 0, .3, .3); }
+const drum = (name, when, vol, pan = 0) => play(name, { bus: musBus, when, vol, pan, jit: name === 'm_kick' ? 0 : .04 });
+// 사이드체인: 킥이 칠 때 베이스·패드·아르페지오를 순간 눌러 '쿵쿵' 펌핑감을 만든다
+function sideDuck(when, depth = .4) { if (!sideBus) return; const g = sideBus.gain, t = AC.currentTime + when; g.setValueAtTime(depth, t); g.linearRampToValueAtTime(1, t + .13); }
+function stinger(notes, vol) { for (const [n, t, d] of notes) { inst('m_lead', n - 12, t, d, vol); inst('m_lead', n, t, d, vol * .3); inst('m_bass', n - 36, t, Math.min(d, .3), vol); } drum('m_kick', 0, .8); }
 
-// ───────── 음악 (군악풍): 베이스 현악 스타카토, 현악 화음, 금관 선율, 군대 스네어, 팀파니, 심벌
+// ───────── 음악: 빠른 액션 신스 (킥·스네어·클랩·하이햇 + 16분음 베이스 + 아르페지오 + 슈퍼소 리드 + 사이드체인)
 const bars = a => a.flatMap(r => Array(8).fill(r));
 const SONGS = {
-  stage: { bpm: 150, drive: 1, roots: bars([45, 45, 43, 40, 41, 41, 43, 40, 41, 41, 43, 43, 45, 45, 40, 40]),
+  stage: { bpm: 164, drive: 1, roots: bars([45, 45, 43, 40, 41, 41, 43, 40, 41, 41, 43, 43, 45, 45, 40, 40]),
     lead: [76,0,76,74,76,0,81,0, 79,0,76,0,74,0,72,0, 74,0,74,72,74,0,79,0, 76,0,0,0,71,0,74,0,
            77,0,77,76,77,0,81,0, 79,0,77,0,76,0,74,0, 76,0,79,0,83,0,81,0, 80,0,76,0,80,0,83,0,
            72,0,77,0,81,0,77,0, 84,0,81,0,77,0,81,0, 74,0,79,0,83,0,79,0, 86,0,83,0,79,0,83,0,
            76,0,81,0,84,0,81,0, 88,0,86,0,84,0,81,0, 80,0,83,0,88,0,86,0, 83,0,80,0,76,0,80,0] },
-  boss: { bpm: 172, drive: 2, roots: bars([38, 38, 36, 37, 38, 38, 41, 40]),
+  boss: { bpm: 184, drive: 2, roots: bars([38, 38, 36, 37, 38, 38, 41, 40]),
     lead: [74,0,77,0,81,0,80,81, 0,77,0,74,0,73,74,0, 72,0,76,0,79,0,78,79, 73,0,76,0,79,0,82,0,
            81,0,86,0,89,0,88,86, 0,84,0,81,0,82,81,0, 84,0,89,0,93,0,91,89, 0,88,0,85,0,88,0,91] },
-  title: { bpm: 104, drive: 0, roots: bars([45, 41, 36, 43]),
+  title: { bpm: 118, drive: 0, roots: bars([45, 41, 36, 43]),
     lead: [69,0,0,72,0,0,76,0, 77,0,0,76,0,0,72,0, 67,0,0,72,0,0,76,0, 74,0,0,71,0,0,67,0] },
 };
 let song = null, songStep = 0, songT = 0, songTr = 0;
@@ -491,34 +530,34 @@ function music(name, stage = 0) {
   songTr = name === 'stage' ? [0, 3, -2, 5, 2][stage % 5] : name === 'boss' ? [0, 2, -1, 3, 1][stage % 5] : 0;
 }
 function musicTick() {
-  if (!AC || !song || muted || !BUF.i_brass) return;
+  if (!AC || !song || muted || !BUF.m_kick) return;
   if (songT < AC.currentTime) songT = AC.currentTime + .02;
-  while (songT < AC.currentTime + .15) {
-    const w = songT - AC.currentTime, sl = 30 / song.bpm, st = songStep, r0 = song.roots[st % song.roots.length], r = r0 + songTr, L = song.lead, li = st % L.length, l = L[li], b8 = st % 8, barN = st >> 3, dv = song.drive;
-    const pc = r0 % 12, third = pc === 9 || pc === 2 ? 3 : 4, fill = barN % 8 === 7 && b8 >= 4;
-    // 베이스: 현악 스타카토
-    if (dv || b8 % 2 === 0) inst('i_cello', r - 12 + [0, 0, 12, 0, 0, 12, 7, 12][b8] * (dv ? 1 : 0), w, sl * (dv ? .8 : 1.8), dv ? .32 : .25);
-    // 화음: 현악 (마디 시작마다)
-    if (b8 === 0) for (const k of [12, 12 + third, 19]) inst('i_strings', r + k, w, sl * 8 + .35, dv ? .13 : .17, (k - 15) / 12);
-    // 선율: 금관 (다음 음까지 길게), 한 옥타브 아래 호른으로 받쳐줌
-    if (l) { let n = 1; while (n < 6 && !L[(li + n) % L.length]) n++; const d = sl * n * .95, m = l + songTr - 12; inst('i_brass', m, w, d, dv ? .3 : .24); inst('i_brass', m - 12, w, d, dv ? .14 : .1); }
-    // 보스: 마디 첫 박에 금관 화음 스탭
-    if (dv > 1 && (b8 === 0 || b8 === 3)) for (const k of [0, third, 7]) inst('i_brass', r + k, w, sl * .7, .12);
-    // 타악: 군대 스네어 / 큰북 / 팀파니 / 심벌
-    if (dv) {
-      if (b8 === 2 || b8 === 6) inst('i_snare', 60, w, .4, .42);
-      else if (dv > 1 || b8 % 2) inst('i_snare', 60, w, .2, .1);
-      if (dv > 1) inst('i_snare', 60, w + sl / 2, .2, .07);
-      if (b8 === 0 || b8 === 4) inst('i_bd', 60, w, 1, .42);
-      if (dv > 1 ? b8 % 2 === 0 : (b8 === 0 && barN % 2 === 0)) inst('i_timp', r - 12 + (dv > 1 && b8 === 4 ? 7 : 0), w, 1.6, dv > 1 ? .32 : .4);
-      if (fill) for (let i = 0; i < 2; i++) inst('i_snare', 60, w + i * sl / 2, .2, .14 + (b8 - 4) * .06);
-      if (b8 === 0 && barN % 8 === 0) inst('i_cym', 60, w, 2.6, .22);
-    } else {
-      if (b8 === 0 && barN % 2 === 0) inst('i_timp', r - 12, w, 2, .3);
-      if (barN % 4 === 3 && b8 >= 4) for (let i = 0; i < 3; i++) inst('i_snare', 60, w + i * sl / 3, .15, .04 + (b8 - 4) * .025 + i * .01);
-      if (b8 === 0 && barN % 4 === 0) inst('i_cym', 60, w, 2.6, .1);
-    }
-    songStep++; songT += sl;
+  while (songT < AC.currentTime + .12) {
+    const w = songT - AC.currentTime, s16 = 15 / song.bpm, q = songStep, st = q >> 1, odd = q & 1, b16 = q % 16, barN = q >> 4, dv = song.drive;
+    const r0 = song.roots[st % song.roots.length], r = r0 + songTr, pc = r0 % 12, third = pc === 9 || pc === 2 ? 3 : 4;
+    const L = song.lead, li = st % L.length, l = odd ? 0 : L[li], fill = dv && barN % 8 === 7 && b16 >= 8;
+    // 드럼
+    if (dv === 2) { if ([0, 3, 6, 8, 11, 14].includes(b16) && !(fill && b16 > 8)) { drum('m_kick', w, .95); sideDuck(w); } }
+    else if (dv === 1) { if ([0, 6, 8].includes(b16) || (b16 === 14 && barN % 2)) { drum('m_kick', w, .95); sideDuck(w); } }
+    else if (b16 === 0 || b16 === 8) { drum('m_kick', w, .5); sideDuck(w, .7); }
+    if (dv && (b16 === 4 || b16 === 12)) { drum('m_snare', w, .7); drum('m_clap', w, .32); }
+    if (dv > 1 && (b16 === 7 || b16 === 15)) drum('m_snare', w, .14);
+    if (fill) drum('m_snare', w, .22 + (b16 - 8) * .07);
+    if (dv) { if (b16 % 2 === 0 || dv > 1) drum(b16 === 14 ? 'm_ohat' : 'm_hat', w, b16 % 4 === 2 ? .36 : .2, .25); }
+    else if (b16 % 4 === 2) drum('m_hat', w, .12, .25);
+    if (b16 === 0 && barN % 8 === 0) drum('i_cym', w, dv ? .3 : .15);
+    // 베이스: 16분음 옥타브 구동
+    const bp = dv ? [0, 0, 12, 0, 0, 12, 0, 0, 0, 0, 12, 0, 7, 0, 12, 0] : [0, -1, -1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, 7, -1];
+    if (bp[b16] >= 0) inst('m_bass', r - 12 + bp[b16], w, s16 * (dv ? .85 : 3.5), dv ? .42 : .3, 0, sideBus);
+    // 패드 화음 (마디마다)
+    if (b16 === 0) for (const k of [12, 12 + third, 19]) inst('m_pad', r + k, w, s16 * 16 + .2, dv ? .08 : .14, (k - 15) / 14, sideBus);
+    // 아르페지오
+    if (dv || b16 % 2 === 0) { const ar = [12, 19, 12 + third, 24, 19, 12 + third, 24, 31]; inst('m_pluck', r + 12 + ar[b16 % 8], w, s16 * .9, dv ? .09 : .12, b16 % 2 ? .4 : -.4, sideBus); }
+    // 리드 선율
+    if (l) { let n = 1; while (n < 6 && !L[(li + n) % L.length]) n++; const d = s16 * 2 * n * .9, m = l + songTr - 12; inst('m_lead', m, w, d, dv ? .24 : .2); if (dv) inst('m_lead', m + 12, w, d, .06); }
+    // 보스: 코드 스탭
+    if (dv > 1 && (b16 === 0 || b16 === 6)) for (const k of [0, third, 7]) inst('m_lead', r + k, w, s16 * 1.2, .07, 0, sideBus);
+    songStep++; songT += s16;
   }
 }
 
@@ -539,9 +578,9 @@ function tick(o) {
   const t = AC.currentTime; LP.x = o.px; LP.y = o.py;
   // 플레이어 엔진: 위로 가속하면 회전수 상승
   if (!engV && BUF.jet) { engV = play('jet', { bus: engBus, loop: true, jit: 0, vol: 1 }); }
-  if (engV) { engBus.gain.setTargetAtTime(o.playing && !muted ? .32 : 0, t, .3); engV.s.playbackRate.setTargetAtTime(1 + o.throttle * .05, t, .3); }
+  if (engV) { engBus.gain.setTargetAtTime(o.playing && !muted ? .2 : 0, t, .3); engV.s.playbackRate.setTargetAtTime(1 + o.throttle * .05, t, .3); }
   const want = o.state === 'title' || o.state === 'select' ? 'amb_ocean' : AMB[o.bg] || 'amb_ocean';
-  setAmb(want, o.state === 'play' ? .55 : o.state === 'story' ? .35 : .3);
+  setAmb(want, o.state === 'play' ? .32 : o.state === 'story' ? .35 : .3);
   // 전장 분위기: 먼 폭발, 대서양 천둥
   if (o.state === 'play' && t > nextEvt) {
     if (nextEvt) { if (o.bg === 5 && Math.random() < .6) SFX.thunder(); else play('boomL', { vol: .16, lp: 900, pan: Math.random() * 1.6 - .8, rate: .8 }); }
@@ -550,6 +589,6 @@ function tick(o) {
 }
 function setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : .9; if (m) radioStatic(false); }
 
-window.IronSound = { unlock, SFX, music, tick, setMuted, stopRadio: () => radioStatic(false), get ready() { return rendered; }, get ctx() { return AC; }, _buf: BUF,
+window.IronSound = { unlock, SFX, music, tick, setMuted, stopRadio: () => radioStatic(false), get ready() { return rendered; }, get ctx() { return AC; }, _buf: BUF, _dbg: () => ({ q: queue.length, raw: Object.keys(RAW), next: queue[0] && queue[0][0] }),
   level() { if (!meter) return null; const d = new Float32Array(meter.fftSize); meter.getFloatTimeDomainData(d); let p = 0, q = 0; for (const v of d) { p = Math.max(p, Math.abs(v)); q += v * v; } return { peak: p, rms: Math.sqrt(q / d.length) }; } };
 })();

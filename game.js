@@ -555,13 +555,13 @@ function buildClouds() {
 
 // ───────────────────────── 기체 정의
 const PLANES = [
-  { name: 'TWIN COMET', spr: 'p38', exh: [[-12.5, 15], [12.5, 15]], speed: 4.2, dmg: 1, sub: 'homing', chg: 'lance', bomb: 'carpet', shot: 'pshot', ko: ['유도 미사일', '관통 랜스', '융단 폭격'],
+  { name: 'SHADOW FALCON', spr: 'shin', exh: [[-2.8, 26], [2.8, 26]], speed: 4.2, dmg: 1, sub: 'homing', chg: 'lance', bomb: 'carpet', shot: 'pshotB', ko: ['유도 미사일', '관통 랜스', '융단 폭격'],
     shots: [[[-5, 0], [5, 0]], [[-10, 0], [0, 0], [10, 0]], [[-15, 0], [-5, 0], [5, 0], [15, 0]], [[-15, 0], [-5, 0], [5, 0], [15, 0], [-19, -.14], [19, .14]]] },
   { name: 'ARROWHEAD', spr: 'spit', exh: [[0, 27]], speed: 3.9, dmg: 1.25, sub: 'rocket', chg: 'fireball', bomb: 'pillar', shot: 'pshot', ko: ['직진 로켓', '대형 화염탄', '섬광 기둥'],
     shots: [[[-4, 0], [4, 0]], [[-8, 0], [0, 0], [8, 0]], [[-12, 0], [-4, 0], [4, 0], [12, 0]], [[-16, 0], [-8, 0], [0, 0], [8, 0], [16, 0]]] },
   { name: 'DELTA LANCE', spr: 'zero', exh: [[0, 28]], speed: 4.7, dmg: .9, sub: 'side', chg: 'wingmen', bomb: 'carpet', shot: 'pshotB', ko: ['확산 측면탄', '편대 호위기', '융단 폭격'],
     shots: [[[-5, 0], [5, 0]], [[-5, 0], [5, 0], [-9, -.16], [9, .16]], [[-5, 0], [5, 0], [-9, -.16], [9, .16], [-12, -.32], [12, .32]], [[-8, 0], [0, 0], [8, 0], [-10, -.16], [10, .16], [-13, -.32], [13, .32]]] },
-  { name: 'SHADOW FALCON', spr: 'shin', exh: [[-2.8, 26], [2.8, 26]], speed: 3.6, dmg: 1.5, sub: 'blade', chg: 'wave', bomb: 'pillar', shot: 'pshotB', ko: ['관통 칼날', '초승달 파동', '섬광 기둥'],
+  { name: 'TWIN COMET', spr: 'p38', exh: [[-12.5, 15], [12.5, 15]], speed: 3.6, dmg: 1.5, sub: 'blade', chg: 'wave', bomb: 'pillar', shot: 'pshot', ko: ['관통 칼날', '초승달 파동', '섬광 기둥'],
     shots: [[[-4, 0], [4, 0]], [[-7, 0], [0, 0], [7, 0]], [[-10, 0], [-3.5, 0], [3.5, 0], [10, 0]], [[-13, 0], [-6.5, 0], [0, 0], [6.5, 0], [13, 0]]] },
 ];
 
