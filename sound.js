@@ -71,14 +71,14 @@ function gun(seed, o) {
   reverb(L, R, sr, o.rev || .16, .72, .5); return fadeEnds(norm([L, R], .9), sr);
 }
 function explosion(seed, size) {
-  const P = [{ d: .75, f0: 105, lt: .085, rc: 3800, rt: .12, deb: 5, rev: .07 }, { d: 1.35, f0: 82, lt: .17, rc: 3000, rt: .27, deb: 12, rev: .1 }, { d: 2.4, f0: 62, lt: .34, rc: 2300, rt: .6, deb: 26, rev: .16 }][size];
+  const P = [{ d: .8, f0: 95, lt: .1, rc: 2200, rt: .16, deb: 3, rev: .08 }, { d: 1.4, f0: 75, lt: .19, rc: 1900, rt: .3, deb: 6, rev: .11 }, { d: 2.4, f0: 58, lt: .36, rc: 1600, rt: .62, deb: 12, rev: .16 }][size];
   const sr = S44, L = buf(P.d, sr), R = buf(P.d, sr), n = L.length, r = rng(seed);
-  const hp = new BQ('hp', 700, .7, sr), fl = new BQ('lp', P.rc, .6, sr), fr = new BQ('lp', P.rc, .6, sr), tb = vnoise(r, 14, sr, n), tb2 = vnoise(r, 3, sr, n);
+  const hp = new BQ('lp', 1800, .7, sr), body = new BQ('bp', 420, .9, sr), fl = new BQ('lp', P.rc, .6, sr), fr = new BQ('lp', P.rc, .6, sr), tb = vnoise(r, 14, sr, n), tb2 = vnoise(r, 3, sr, n);
   let ph = 0, bl = 0, br = 0;
   for (let i = 0; i < n; i++) {
     const t = i / sr, wl = r() * 2 - 1, wr = r() * 2 - 1;
     if ((i & 31) === 0) { const c = 110 + (P.rc - 110) * Math.exp(-t / (P.d * .22)); fl.set(c); fr.set(c * 1.05); }
-    let x = t < .012 ? hp.p(wl) * (1 - t / .012) * 1.4 : 0;
+    let x = (t < .02 ? hp.p(wl) * (1 - t / .02) * 1.3 : 0) + body.p(wl) * Math.exp(-t / (P.lt * .7)) * 1.1;
     ph += TAU * (26 + (P.f0 - 26) * Math.exp(-t / (P.lt * .6))) / sr;
     const low = sat(Math.sin(ph) * (1 - Math.exp(-t / .004)) * Math.exp(-t / P.lt) * 1.6, 1.4);
     bl = (bl + .02 * wl) / 1.02; br = (br + .02 * wr) / 1.02;
@@ -89,22 +89,21 @@ function explosion(seed, size) {
   if (size) { const t0 = Math.floor((.18 + r() * .15) * sr), f2 = new BQ('bp', 900, .8, sr); for (let i = 0; i < .25 * sr && t0 + i < n; i++) { const e = Math.exp(-i / sr / .07) * .5 * size; const v = f2.p(r() * 2 - 1) * e; L[t0 + i] += v; R[t0 + i] += v * .8; } }
   // 파편 튀는 소리
   for (let k = 0; k < P.deb; k++) {
-    const t0 = Math.floor((.03 + P.d * .7 * Math.pow(r(), 1.7)) * sr), f = new BQ('bp', 1800 + r() * 4500, 3, sr), a = (.15 + r() * .35) * (1 - t0 / n), pan = r(), len = (.006 + r() * .02) * sr;
-    for (let i = 0; i < len && t0 + i < n; i++) { const v = f.p(r() * 2 - 1) * a * Math.exp(-i / len * 4); L[t0 + i] += v * (1 - pan) * 1.4; R[t0 + i] += v * pan * 1.4; }
+    const t0 = Math.floor((.05 + P.d * .5 * Math.pow(r(), 1.7)) * sr), f = new BQ('bp', 220 + r() * 600, 1.2, sr), a = (.2 + r() * .3) * (1 - t0 / n), pan = r(), len = (.03 + r() * .04) * sr;
+    for (let i = 0; i < len && t0 + i < n; i++) { const v = f.p(r() * 2 - 1) * a * Math.exp(-i / len * 4); L[t0 + i] += v * (1.4 - pan * .8); R[t0 + i] += v * (.6 + pan * .8); }
   }
   for (let i = 0; i < n; i++) { L[i] = sat(L[i], 1.3); R[i] = sat(R[i], 1.3); }
   reverb(L, R, sr, P.rev, .75, .6); return fadeEnds(norm([L, R], .95), sr, .001, .15);
 }
-function tink(seed, ric) {
-  const sr = S44, d = ric ? .5 : .18, L = buf(d, sr), R = buf(d, sr), r = rng(seed), hp = new BQ('hp', 3000, .7, sr);
-  const parts = [0, 1, 2, 3].map(() => [1800 + r() * 4800, .012 + r() * .03, .2 + r() * .3]);
+function tink(seed) { // 총알이 기체에 맞는 소리: 짧고 둔탁한 금속 타격
+  const sr = S44, d = .12, L = buf(d, sr), R = buf(d, sr), r = rng(seed), lp = new BQ('lp', 2600, .7, sr), bp = new BQ('bp', 900 + r() * 500, 1.4, sr);
+  const parts = [0, 1].map(() => [500 + r() * 900, .008 + r() * .01, .25 + r() * .2]);
   for (let i = 0; i < L.length; i++) {
-    const t = i / sr; let x = t < .003 ? hp.p(r() * 2 - 1) * (1 - t / .003) : 0;
+    const t = i / sr, w = r() * 2 - 1; let x = lp.p(w) * Math.exp(-t / .006) * .9 + bp.p(w) * Math.exp(-t / .02) * .8;
     for (const [f, dc, a] of parts) x += Math.sin(TAU * f * t) * Math.exp(-t / dc) * a;
-    if (ric && t > .02) { const u = t - .02, f = 2900 - 1300 * Math.min(1, u / .35); x += Math.sin(TAU * (f + 40 * Math.sin(TAU * 31 * u)) * u) * Math.exp(-u / .15) * .25 * Math.min(1, u / .02); }
-    L[i] = x; R[i] = x;
+    L[i] = R[i] = sat(x, 1.5);
   }
-  reverb(L, R, sr, .1, .6, .5); return fadeEnds(norm([L, R], .8), sr);
+  return fadeEnds(norm([L, R], .75), sr);
 }
 function clank(seed, d = .45, f0 = 320) {
   const sr = S44, L = buf(d, sr), R = buf(d, sr), r = rng(seed), lp = new BQ('lp', 2500, .7, sr);
@@ -360,7 +359,7 @@ const DEFS = {
   boomS: [11, 12, 13].map(s => () => explosion(s, 0)),
   boomM: [21, 22, 23].map(s => () => explosion(s, 1)),
   boomL: [31, 32].map(s => () => explosion(s, 2)),
-  tink: [41, 42, 43].map(s => () => tink(s, 0)).concat([() => tink(44, 1)]),
+  tink: [41, 42, 43, 44].map(s => () => tink(s)),
   clank: [51, 52].map(s => () => clank(s)),
   engine: [() => engineLoop(61, 36, 2)],
   jet: [() => jetLoop(62)], jstart: [() => jetStart(63)],
@@ -387,7 +386,7 @@ const SRATE = { m_bass: S32, m_lead: S32, m_pluck: S32, m_pad: S32, alarm: S32, 
 const RAW = {}; // 이름 → [[L,R], ...]
 let rendered = false;
 // 로딩 직후 백그라운드에서 조금씩 렌더 (화면이 멈추지 않게)
-const order = ['blip', 'blip2', 'm_kick', 'm_hat', 'm_snare', 'm_bass', 'm_pluck', 'm_pad', 'm_lead', 'm_ohat', 'm_clap', 'i_cym', 'amb_ocean', 'gun', 'boomS', 'tink', 'egun', 'boomM', 'jet', 'jstart', 'rOn', 'rOff', 'type', 'ping', 'i_bd', 'boomL', 'clank', 'cannon', 'alarm', 'drone', 'sw', 'i_timp', 'flyby', 'whoosh', 'spin', 'dive', 'shimmer', 'coin', 'coin2', 'rStatic', 'amb_desert', 'amb_arctic', 'amb_storm', 'amb_fortress', 'thunder'];
+const order = ['blip', 'blip2', 'm_kick', 'm_hat', 'm_snare', 'm_bass', 'm_pluck', 'm_pad', 'm_lead', 'm_ohat', 'm_clap', 'i_cym', 'amb_ocean', 'gun', 'boomS', 'tink', 'egun', 'boomM', 'jet', 'jstart', 'rOn', 'rOff', 'type', 'ping', 'i_bd', 'boomL', 'clank', 'cannon', 'alarm', 'drone', 'sw', 'i_timp', 'flyby', 'whoosh', 'spin', 'dive', 'coin', 'coin2', 'rStatic', 'amb_desert', 'amb_arctic', 'amb_storm', 'amb_fortress', 'thunder'];
 const queue = []; for (const k of order) DEFS[k].forEach((f, i) => queue.push([k, i, f]));
 function pump() {
   const t0 = performance.now();
@@ -462,7 +461,7 @@ const F = () => AC ? AC.currentTime : 0;
 const SFX = {
   shot: () => play('gun', { vol: .4, jit: .12, pan: (LP.x / W - .5) * .6 }),
   sub: () => play('whoosh', { vol: .22, pan: (LP.x / W - .5) * .6 }),
-  tick: (x, y) => { if (F() - lastTick < .045) return; lastTick = F(); play('tink', { x, y, vol: .28, jit: .25 }); },
+  tick: (x, y) => { if (F() - lastTick < .045) return; lastTick = F(); play('tink', { x, y, vol: .3, jit: .15 }); },
   eshot: (x, y) => play('egun', { x, y, vol: .3, jit: .15 }),
   boom: (x, y) => { if (F() - lastBoom < .04) return; lastBoom = F(); play('boomS', { x, y, vol: .6, jit: .14 }); },
   mid: (x, y) => { play('boomM', { x, y, vol: .85 }); duck(.82, .15); },
@@ -482,7 +481,7 @@ const SFX = {
   hit: () => { play('clank', { vol: .6, jit: .2 }); play('tink', { vol: .3, rate: .8 }); },
   warn: () => { if (F() - lastWarn < 1.9) return; lastWarn = F(); play('alarm', { vol: .5, jit: 0 }); },
   bossIn: () => { play('drone', { vol: .7, jit: 0, rate: 1.3 }); play('m_kick', { vol: 1, when: 2.6, rate: .6 }); play('i_cym', { vol: .4, when: 2.6 }); },
-  cancel: () => play('shimmer', { vol: .35 }),
+  cancel: () => play('whoosh', { vol: .3, rate: .55 }),
   ok: () => { play('blip', { vol: .5 }); play('blip2', { vol: .45, when: .07 }); },
   sel: () => play('blip', { vol: .4, jit: .05 }),
   start: () => { play('jstart', { vol: .7, jit: 0 }); play('blip2', { vol: .5 }); play('m_kick', { vol: .8, when: .8 }); },
