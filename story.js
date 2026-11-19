@@ -137,14 +137,14 @@ function tacMap(x, y, w, h, st, tt, label = 'TGT') {
 function dialogue(lines) { return { lines, i: 0, ch: 0, done: !lines.length }; }
 function dlgTick(d) {
   if (d.done) return; const L = d.lines[d.i];
-  if (d.ch < L[1].length) { const before = d.ch | 0; d.ch = Math.min(L[1].length, d.ch + 1.6); if ((d.ch | 0) !== before && (d.ch | 0) % 5 === 0) play('tick'); }
+  if (d.ch < L[1].length) { const before = d.ch | 0; d.ch = Math.min(L[1].length, d.ch + 1.6); if ((d.ch | 0) !== before && (d.ch | 0) % 3 === 0) play('type'); }
 }
 function dlgTyping(d) { return !d.done && d.ch < d.lines[d.i][1].length; }
 function dlgAdvance(d) { // true = 모든 대사 끝
   if (d.done) return true;
   if (dlgTyping(d)) { d.ch = d.lines[d.i][1].length; return false; }
   d.i++; d.ch = 0; if (d.i >= d.lines.length) { d.done = true; d.i = d.lines.length - 1; d.ch = 1e9; return true; }
-  play('sel'); return false;
+  play('squelch'); return false;
 }
 function dlgBox(d, x, y, w, h, tt) {
   panel(x, y, w, h);
@@ -200,6 +200,7 @@ function skip() {
 function update(inp) {
   if (!S) return null;
   frame++; const pg = S.pages[S.pi]; pg.t++; if (S.fade > 0) S.fade--;
+  if (pg.t === 2 && pg.dlg && pg.dlg.lines.length) play('squelch');
   let adv = inp.adv, sk = inp.skip;
   if (inp.tap) { if (inp.ty < 40 && inp.tx > 396 && pg.type !== 'final') { sk = true; adv = false; } }
   if (pg.t < 12) adv = sk = false; // 앞 화면에서 누른 키가 그대로 넘어가지 않게
@@ -347,13 +348,13 @@ function render() {
 let radioQ = [], radioCur = null;
 function radio(who, text) { if (!enabled) return; if (radioQ.length < 3) radioQ.push({ who, text }); }
 function radioEvent(name) { const a = DATA.events[name]; if (a && !radioCur) { const L = a[Math.random() * a.length | 0]; radio(L[0], L[1]); } }
-function clearRadio() { radioQ = []; radioCur = null; }
+function clearRadio() { radioQ = []; radioCur = null; try { window.IronSound && IronSound.stopRadio(); } catch (_) {} }
 function tickPlay(stageIdx, st) {
   if (!enabled) return;
   const s = stageOf(stageIdx);
   for (const m of s.inGameMessages) if (m[0] === st) radio(m[1], m[2]);
-  if (!radioCur && radioQ.length) { radioCur = Object.assign(radioQ.shift(), { t: 0 }); radioCur.end = radioCur.text.length / 1.6 + 170; play('sel'); }
-  if (radioCur && ++radioCur.t > radioCur.end) radioCur = null;
+  if (!radioCur && radioQ.length) { radioCur = Object.assign(radioQ.shift(), { t: 0 }); radioCur.end = radioCur.text.length / 1.6 + 170; try { SFX.radioOn && SFX.radioOn(radioCur.end / 60); } catch (_) {} }
+  if (radioCur && ++radioCur.t > radioCur.end) { radioCur = null; play('radioOff'); }
 }
 function drawRadio() {
   const r = radioCur; if (!r) return;

@@ -1,6 +1,6 @@
 // 오프라인 캐시: 네트워크 우선, 실패하면 저장된 사본으로 실행 (게임을 고치면 다음 실행 때 자동 갱신)
-const C = 'ironsky-v4';
-const FILES = ['./index.html', './game.js', './story.js', './story-data.js', './assets/story/manifest.js',
+const C = 'ironsky-v5';
+const FILES = ['./index.html', './game.js', './story.js', './story-data.js', './sound.js', './assets/story/manifest.js',
   ...['stage1', 'stage2', 'stage3', 'stage4', 'stage5'].map(s => `./assets/story/backgrounds/${s}/main.jpg`),
   './assets/story/endings/destruction.jpg', './assets/story/endings/sunrise.jpg',
   ...['commander', 'falcon1', 'wingman', 'intel', 'enemy'].map(c => `./assets/story/characters/${c}/portrait.jpg`), './manifest.webmanifest', './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png'];

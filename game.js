@@ -62,135 +62,16 @@ cv.addEventListener('contextmenu', e => { e.preventDefault(); pressed.KeyX = 1; 
 const hit = (...c) => c.some(k => pressed[k]);
 const held = (...c) => c.some(k => keys[k]);
 
-// ───────────────────────── 사운드 (WebAudio 합성: 컴프레서·리버브·딜레이·디스토션·스테레오 패닝)
-let AC = null, master, sfxBus, musBus, boomBus, revSend, delSend, noiseBuf, eng = null, muted = false, song = null, songStep = 0, songT = 0, songTr = 0;
-function audio() {
-  if (AC) { if (AC.state !== 'running') AC.resume().catch(() => {}); return; }
-  try {
-    AC = new (window.AudioContext || window.webkitAudioContext)(); const sr = AC.sampleRate;
-    const comp = AC.createDynamicsCompressor(); comp.threshold.value = -15; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = .003; comp.release.value = .2;
-    master = AC.createGain(); master.gain.value = muted ? 0 : .85; master.connect(comp); comp.connect(AC.destination);
-    sfxBus = AC.createGain(); sfxBus.gain.value = .9; sfxBus.connect(master);
-    musBus = AC.createGain(); musBus.gain.value = .5; musBus.connect(master);
-    noiseBuf = AC.createBuffer(1, sr * 2, sr); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const ir = AC.createBuffer(2, sr * 2, sr); for (let c = 0; c < 2; c++) { const b = ir.getChannelData(c); for (let i = 0; i < b.length; i++) b[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / b.length, 2.8); }
-    const conv = AC.createConvolver(); conv.buffer = ir; revSend = AC.createGain(); revSend.gain.value = .55; revSend.connect(conv); conv.connect(master);
-    const dl = AC.createDelay(1), fb = AC.createGain(), dlp = AC.createBiquadFilter(); dl.delayTime.value = .29; fb.gain.value = .34; dlp.type = 'lowpass'; dlp.frequency.value = 2400;
-    delSend = AC.createGain(); delSend.gain.value = 1; delSend.connect(dl); dl.connect(dlp); dlp.connect(fb); fb.connect(dl); dlp.connect(musBus);
-    const sh = AC.createWaveShaper(), cv = new Float32Array(1024); for (let i = 0; i < 1024; i++) cv[i] = Math.tanh((i / 512 - 1) * 3.2); sh.curve = cv;
-    boomBus = AC.createGain(); boomBus.gain.value = 1; boomBus.connect(sh); sh.connect(sfxBus);
-    // 프로펠러 엔진음 (플레이 중 상시)
-    const eg = AC.createGain(), lp = AC.createBiquadFilter(), trem = AC.createGain(), lfo = AC.createOscillator(), lg = AC.createGain(); eg.gain.value = 0; lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 2;
-    lfo.frequency.value = 14; lg.gain.value = .4; lfo.connect(lg); lg.connect(trem.gain); lfo.start();
-    const os = [[58, 'sawtooth'], [87.4, 'sawtooth'], [29.2, 'square']].map(([f, ty]) => { const o = AC.createOscillator(); o.type = ty; o.frequency.value = f; o.connect(lp); o.start(); return o; });
-    lp.connect(trem); trem.connect(eg); eg.connect(sfxBus); eng = { g: eg, os, lfo };
-  } catch (_) { AC = null; }
-}
-function sndOut(n, o) {
-  if (o.pan && AC.createStereoPanner) { const p = AC.createStereoPanner(); p.pan.value = clamp(o.pan, -1, 1); n.connect(p); n = p; }
-  n.connect(o.bus || sfxBus);
-  if (o.rev) { const r = AC.createGain(); r.gain.value = o.rev; n.connect(r); r.connect(revSend); }
-  if (o.del) { const r = AC.createGain(); r.gain.value = o.del; n.connect(r); r.connect(delSend); }
-}
-function tone(f, d, type = 'square', v = .1, f2 = 0, when = 0, o = {}) {
-  if (!AC || !(f > 0)) return; const t = AC.currentTime + when, g = AC.createGain();
-  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + (o.a || .004)); g.gain.exponentialRampToValueAtTime(.0008, t + d);
-  let dst = g; if (o.lp) { const fl = AC.createBiquadFilter(); fl.type = 'lowpass'; fl.Q.value = o.q || 1; fl.frequency.setValueAtTime(o.lp, t); if (o.lp2) fl.frequency.exponentialRampToValueAtTime(o.lp2, t + d); fl.connect(g); dst = fl; }
-  for (const det of (o.det ? [-o.det, o.det] : [0])) { const os = AC.createOscillator(); os.type = type; os.detune.value = det; os.frequency.setValueAtTime(f, t); if (f2) os.frequency.exponentialRampToValueAtTime(f2, t + d); os.connect(dst); os.start(t); os.stop(t + d + .03); }
-  sndOut(g, o);
-}
-function noise(d, v, f0, f1, when = 0, o = {}) {
-  if (!AC) return; const t = AC.currentTime + when, s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
-  s.buffer = noiseBuf; s.loop = true; f.type = o.type || 'lowpass'; f.Q.value = o.q || .7; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + d);
-  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + (o.a || .003)); g.gain.exponentialRampToValueAtTime(.0008, t + d);
-  s.connect(f); f.connect(g); sndOut(g, o); s.start(t, Math.random() * 1.5); s.stop(t + d + .03);
-}
-const NF = n => 440 * Math.pow(2, (n - 69) / 12);
-const px = x => x === undefined ? 0 : (x / W - .5) * 1.3, rp = () => .85 + Math.random() * .3;
-let lastBoom = 0, lastE = 0, lastCancel = 0, lastTk = 0;
-const SFX = {
-  shot: () => { const p = rp(); noise(.05, .05, 2600 * p, 900, 0, { type: 'bandpass', q: 1.2 }); tone(820 * p, .05, 'square', .026, 260); tone(170, .06, 'triangle', .06, 70); },
-  sub: () => { noise(.3, .06, 700, 4200, 0, { type: 'bandpass', q: 2, a: .04 }); tone(240, .25, 'sawtooth', .03, 520, 0, { lp: 1200 }); },
-  tick: x => { if (frame - lastTk < 3) return; lastTk = frame; const o = { pan: px(x) }; noise(.035, .08, 6500, 3000, 0, { type: 'bandpass', q: 3, pan: o.pan }); tone(2300 * rp(), .045, 'sine', .035, 1500, 0, o); },
-  eshot: x => { if (frame - lastE < 5) return; lastE = frame; tone(340 * rp(), .07, 'square', .03, 150, 0, { pan: px(x), lp: 1400 }); },
-  boom: x => {
-    if (frame - lastBoom < 3) return; lastBoom = frame; const p = rp(), o = { pan: px(x), bus: boomBus, rev: .25 };
-    noise(.06, .3, 5000, 2000, 0, { ...o, type: 'highpass' }); noise(.38, .5, 2800 * p, 140, 0, o); tone(150 * p, .22, 'sine', .5, 42, 0, o); noise(.05, .12, 4000, 2500, .09 + Math.random() * .08, { ...o, type: 'bandpass', q: 2 });
-  },
-  mid: x => {
-    const p = rp(), o = { pan: px(x), bus: boomBus, rev: .45 };
-    noise(.07, .4, 6000, 2500, 0, { ...o, type: 'highpass' }); noise(.85, .7, 2200 * p, 70, 0, o); tone(115 * p, .5, 'sine', .7, 30, 0, o); tone(60, .7, 'triangle', .3, 26, .05, o);
-    for (let i = 0; i < 4; i++) noise(.05, .14, 3500, 1500, .12 + Math.random() * .4, { ...o, type: 'bandpass', q: 2.5 });
-  },
-  big: x => {
-    const o = { pan: px(x) * .6, bus: boomBus, rev: .7 };
-    noise(.09, .5, 7000, 3000, 0, { ...o, type: 'highpass' }); noise(1.5, .9, 1700, 45, 0, o); noise(2.6, .35, 260, 40, .1, o); tone(88, 1.1, 'sine', .9, 24, 0, o); tone(52, 1.4, 'triangle', .45, 20, .16, o); noise(.9, .5, 1200, 60, .2, o);
-    for (let i = 0; i < 7; i++) noise(.06, .16, 3000, 1200, .15 + Math.random() * .9, { ...o, type: 'bandpass', q: 2.5, pan: Math.random() * 2 - 1 });
-  },
-  power: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .17, 'square', .065, 0, i * .055, { det: 7, lp: 3600, rev: .3 })); tone(131, .42, 'sawtooth', .12, 262, 0, { lp: 900 }); noise(.4, .05, 3000, 9000, 0, { type: 'bandpass', q: 3, a: .1 }); },
-  item: () => { [392, 494, 587, 784].forEach((f, i) => tone(f, .16, 'triangle', .12, 0, i * .06, { rev: .3 })); tone(98, .35, 'sawtooth', .12, 196, 0, { lp: 700 }); },
-  gold: () => { tone(1568, .09, 'sine', .13); tone(2093, .32, 'sine', .13, 0, .07, { rev: .4 }); tone(3136, .25, 'triangle', .035, 0, .07); },
-  bomb: ty => {
-    SFX.big();
-    if (ty === 'carpet') { tone(1900, .8, 'sine', .1, 380, 0, { rev: .5 }); tone(1500, .9, 'sine', .07, 300, .25, { rev: .5, pan: .5 }); tone(72, 3, 'sawtooth', .22, 60, 0, { det: 14, lp: 320, a: .4 }); noise(3, .2, 300, 120, 0, { a: .5 }); }
-    else { tone(110, 2.9, 'sawtooth', .24, 98, 0, { det: 18, lp: 400, lp2: 5200, q: 6, a: .15, rev: .5 }); tone(220, 2.9, 'square', .07, 196, 0, { det: 25, lp: 2600 }); noise(2.9, .26, 2500, 9000, 0, { type: 'bandpass', q: 1.5, a: .2, rev: .4 }); tone(1760, .5, 'sine', .1, 3520, 0, { rev: .6 }); }
-  },
-  chargeUp: () => tone(150, .95, 'sawtooth', .07, 980, 0, { lp: 500, lp2: 4200, a: .35, det: 9 }),
-  chargeReady: () => { tone(1319, .08, 'square', .07); tone(1760, .22, 'square', .07, 0, .07, { rev: .4 }); },
-  charge: () => { noise(.5, .35, 600, 7000, 0, { type: 'bandpass', q: 1.2, rev: .4 }); tone(1100, .45, 'sawtooth', .18, 90, 0, { det: 12, lp: 4200, lp2: 500, rev: .4 }); tone(120, .32, 'sine', .5, 40, 0, { bus: boomBus }); },
-  die: () => { SFX.big(P && P.x); tone(900, 1.2, 'sawtooth', .22, 45, 0, { det: 20, lp: 3200, lp2: 200, rev: .5 }); },
-  hit: () => { noise(.22, .45, 3200, 300, 0, { bus: boomBus }); tone(260, .26, 'square', .16, 55, 0, { lp: 1500 }); },
-  warn: () => { const o = { det: 9, lp: 2400, rev: .35 }; tone(587, .3, 'sawtooth', .15, 0, 0, o); tone(587, .3, 'square', .05, 0, 0, o); tone(440, .36, 'sawtooth', .15, 0, .34, o); tone(440, .36, 'square', .05, 0, .34, o); tone(55, .72, 'sawtooth', .16, 0, 0, { lp: 220 }); },
-  bossIn: () => { noise(2.8, .32, 130, 60, 0, { a: .9 }); tone(41, 2.8, 'sawtooth', .16, 36, 0, { lp: 170, a: .7, det: 12 }); },
-  cancel: () => { if (frame - lastCancel < 10) return; lastCancel = frame; [2637, 3136, 3951, 4699].forEach((f, i) => tone(f, .2, 'sine', .035, 0, i * .03, { rev: .5 })); },
-  ok: () => { tone(880, .07, 'square', .08); tone(1320, .16, 'square', .08, 0, .07, { rev: .3 }); },
-  sel: () => { tone(700, .05, 'square', .06); noise(.03, .04, 5000, 3000, 0, { type: 'bandpass', q: 2 }); },
-  start: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, .14, 'square', .08, 0, i * .07, { det: 8, rev: .4 })); noise(1.1, .12, 400, 6000, 0, { type: 'bandpass', q: 1, a: .5 }); tone(60, 1.1, 'sawtooth', .14, 120, 0, { lp: 400, a: .4 }); },
-  ext: () => { [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(f, .16, 'square', .09, 0, i * .1, { det: 8, rev: .4 })); },
-  clear: () => {
-    const M = { bus: musBus, det: 8, lp: 4200, rev: .4 };
-    for (const [n, t, d] of [[72, 0, .14], [72, .16, .14], [72, .32, .14], [76, .48, .3], [79, .8, .3], [76, 1.12, .14], [79, 1.28, .14], [84, 1.44, 1.1]]) { tone(NF(n), d, 'square', .1, 0, t, M); tone(NF(n - 12), d, 'triangle', .12, 0, t, { bus: musBus }); tone(NF(n - 24), d, 'sawtooth', .1, 0, t, { bus: musBus, lp: 500 }); }
-    for (const n of [60, 64, 67]) tone(NF(n), 1.2, 'triangle', .06, 0, 1.44, { bus: musBus, rev: .5 });
-    for (let i = 0; i < 6; i++) noise(.05, .12, 5000, 1500, 1.2 + i * .04, { bus: musBus, type: 'bandpass', q: .8 }); noise(1.4, .12, 9000, 4000, 1.44, { bus: musBus, type: 'highpass', rev: .4 });
-  },
-  over: () => { [[76, 0], [72, .4], [69, .8], [65, 1.2], [64, 1.6]].forEach(([n, t], i) => { tone(NF(n), i === 4 ? 1.6 : .45, 'sawtooth', .1, 0, t, { bus: musBus, det: 10, lp: 1800, rev: .6 }); tone(NF(n - 24), i === 4 ? 1.6 : .45, 'triangle', .14, 0, t, { bus: musBus }); }); },
-};
-const bars = a => a.flatMap(r => Array(8).fill(r));
-const SONGS = {
-  stage: { bpm: 150, drive: 1, roots: bars([45, 45, 43, 40, 41, 41, 43, 40, 41, 41, 43, 43, 45, 45, 40, 40]),
-    lead: [76,0,76,74,76,0,81,0, 79,0,76,0,74,0,72,0, 74,0,74,72,74,0,79,0, 76,0,0,0,71,0,74,0,
-           77,0,77,76,77,0,81,0, 79,0,77,0,76,0,74,0, 76,0,79,0,83,0,81,0, 80,0,76,0,80,0,83,0,
-           72,0,77,0,81,0,77,0, 84,0,81,0,77,0,81,0, 74,0,79,0,83,0,79,0, 86,0,83,0,79,0,83,0,
-           76,0,81,0,84,0,81,0, 88,0,86,0,84,0,81,0, 80,0,83,0,88,0,86,0, 83,0,80,0,76,0,80,0] },
-  boss: { bpm: 178, drive: 2, roots: bars([38, 38, 36, 37, 38, 38, 41, 40]),
-    lead: [74,0,77,0,81,0,80,81, 0,77,0,74,0,73,74,0, 72,0,76,0,79,0,78,79, 73,0,76,0,79,0,82,0,
-           81,0,86,0,89,0,88,86, 0,84,0,81,0,82,81,0, 84,0,89,0,93,0,91,89, 0,88,0,85,0,88,0,91] },
-  title: { bpm: 112, drive: 0, roots: bars([45, 41, 36, 43]),
-    lead: [69,0,0,72,0,0,76,0, 77,0,0,76,0,0,72,0, 67,0,0,72,0,0,76,0, 74,0,0,71,0,0,67,0] },
-};
-function music(name) { if (song === SONGS[name]) return; song = SONGS[name] || null; songStep = 0; songT = AC ? AC.currentTime + .05 : 0; songTr = name === 'stage' ? [0, 3, -2, 5][stage % 4] : name === 'boss' ? [0, 2, -1, 3][stage % 4] : 0; }
-function musicTick() {
-  if (!AC || !song || muted) return;
-  if (songT < AC.currentTime) songT = AC.currentTime + .02;
-  while (songT < AC.currentTime + .14) {
-    const w = songT - AC.currentTime, sl = 30 / song.bpm, st = songStep, r0 = song.roots[st % song.roots.length], r = r0 + songTr, l = song.lead[st % song.lead.length], b8 = st % 8, barN = st >> 3;
-    const pc = r0 % 12, third = pc === 9 || pc === 2 ? 3 : 4, M = { bus: musBus }, dv = song.drive, fill = dv && barN % 8 === 7 && b8 >= 4;
-    tone(NF(r + [0, 0, 12, 0, 0, 12, 7, 12][b8]), sl * .95, 'sawtooth', .2, 0, w, { bus: musBus, lp: 950, lp2: 170, q: 4 });
-    if (b8 === 0) for (const k of [12, 12 + third, 19]) tone(NF(r + k), sl * 8, 'triangle', dv ? .034 : .06, 0, w, { bus: musBus, a: .08, det: 6, rev: dv ? 0 : .4 });
-    if (dv) { const ar = [12, 12 + third, 19, 24, 19, 12 + third, 24, 19]; tone(NF(r + 12 + ar[b8]), sl * .5, 'square', .02, 0, w, { bus: musBus, lp: 2600 }); if (dv > 1) tone(NF(r + 12 + ar[(b8 + 3) % 8]), sl * .45, 'square', .016, 0, w + sl / 2, { bus: musBus, lp: 2600 }); }
-    if (l) { tone(NF(l + songTr), sl * 1.7, 'square', .05, 0, w, { bus: musBus, det: 7, lp: 4200, del: .45 }); tone(NF(l + songTr - 12), sl * 1.5, 'sawtooth', .02, 0, w, { bus: musBus, lp: 1800 }); }
-    if (b8 === 0 || b8 === 4 || (dv > 1 && b8 === 3) || (dv && barN % 2 && b8 === 7)) { tone(155, .17, 'sine', .55, 38, w, M); noise(.02, .12, 3000, 800, w, M); }
-    if (dv ? (b8 === 2 || b8 === 6) : b8 === 4) { noise(.16, dv ? .2 : .1, 5000, 1200, w, { bus: musBus, type: 'bandpass', q: .8, rev: .15 }); tone(190, .09, 'triangle', .13, 110, w, M); }
-    if (dv) { noise(.03, .05, 9000, 7000, w, { bus: musBus, type: 'highpass' }); noise(.02, .026, 9000, 7000, w + sl / 2, { bus: musBus, type: 'highpass' }); }
-    if (fill) for (let i = 0; i < 2; i++) { noise(.07, .12 + (b8 - 4) * .03, 4500, 1500, w + i * sl / 2, { bus: musBus, type: 'bandpass', q: .8 }); tone(220 - b8 * 16, .1, 'sine', .2, 90, w + i * sl / 2, M); }
-    if (dv && b8 === 0 && barN % 8 === 0) noise(1.3, .1, 9000, 4000, w, { bus: musBus, type: 'highpass', rev: .4 });
-    songStep++; songT += sl;
-  }
-}
+// ───────────────────────── 사운드 (sound.js 의 IronSound 엔진: 미리 합성한 샘플 + 환경음 + 군악풍 음악)
+const SND = window.IronSound;
+let AC = null, muted = false;
+function audio() { AC = SND.unlock() || AC; }
+const SFX = SND.SFX;
+function music(name) { SND.music(name, stage); }
+function musicTick() {}
 function engineTick() {
-  if (!eng || frame % 6) return; const on = state === 'play' && P && P.alive && !muted, t = AC.currentTime;
-  eng.g.gain.setTargetAtTime(on ? .075 : 0, t, .25);
-  if (on) { const k = 1 + ((held('ArrowUp', 'KeyW') ? 1 : 0) - (held('ArrowDown', 'KeyS') ? 1 : 0)) * .07;[58, 87.4, 29.2].forEach((f, i) => eng.os[i].frequency.setTargetAtTime(f * k, t, .2)); eng.lfo.frequency.setTargetAtTime(14 * k, t, .2); }
+  SND.tick({ state, playing: state === 'play' && !!P && P.alive && !(P.enter > 0), throttle: (held('ArrowUp', 'KeyW') ? 1 : 0) - (held('ArrowDown', 'KeyS') ? 1 : 0),
+    px: P ? P.x : W / 2, py: P ? P.y : H * .8, bg: THEMES[stage].bg });
 }
 
 // ───────────────────────── 스프라이트 생성
@@ -670,7 +551,7 @@ let hitstop = 0, slow = 0, decals = [], mzF = 0, mzX = 0, lastTick = 0, VIG, CLO
 const bsp = () => 2.3 + stage * .18 + loop * .7;
 const aim = (x, y) => Math.atan2(P.y - y, P.x - x);
 function shoot(x, y, a, sp, k = 0) {
-  if (mzF !== frame || mzX !== x) { mzF = frame; mzX = x; SFX.eshot(x); fx.push({ x, y, vx: 0, vy: 0, t: 0, life: 7, s0: 9, s1: 26, spr: k === 1 ? SP.fxPink : SP.fxFlash, add: 1 }); }
+  if (mzF !== frame || mzX !== x) { mzF = frame; mzX = x; SFX.eshot(x, y); fx.push({ x, y, vx: 0, vy: 0, t: 0, life: 7, s0: 9, s1: 26, spr: k === 1 ? SP.fxPink : SP.fxFlash, add: 1 }); }
   if (eb.length < 700) eb.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, k, a });
 }
 function fan(x, y, a, n, spread, sp, k) { for (let i = 0; i < n; i++) shoot(x, y, a + (n > 1 ? (i / (n - 1) - .5) * spread : 0), sp, k); }
@@ -690,13 +571,13 @@ function boom(x, y, s = 1, quiet) {
   for (let i = 0; i < 2 + (s > 1); i++) fx.push({ x: x + rnd(-R, R) * .4, y: y + rnd(-R, R) * .4, vx: rnd(-.4, .4), vy: 1, t: -6, life: 50, s0: R, s1: R * 2.8, spr: SP.fxSmoke, add: 0 });
   for (let i = 0; i < 5 + s * 4; i++) { const a = rnd(0, TAU), v = rnd(3, 7 + s); fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: 10 + rnd(0, 14), s0: 6 + s, s1: 2, spr: SP.streak, add: 1, rot: a + PI / 2 }); }
   debris(x, y, Math.round(1 + s * 2), 3 + s);
-  if (!quiet) (s >= 3 ? SFX.big : s >= 2 ? SFX.mid : SFX.boom)(x); if (s >= 2) shake = Math.max(shake, 5 * s);
+  if (!quiet) (s >= 3 ? SFX.big : s >= 2 ? SFX.mid : SFX.boom)(x, y); if (s >= 2) shake = Math.max(shake, 5 * s);
   if (fx.length > 1100) fx.splice(0, fx.length - 1100);
 }
 function spark(x, y, blue) {
   fx.push({ x, y, vx: 0, vy: 0, t: 0, life: 7, s0: 7, s1: 20, spr: blue ? SP.fxBlue : SP.fxFlash, add: 1 });
   for (let i = 0; i < 2; i++) { const a = PI / 2 + rnd(-1.2, 1.2), v = rnd(3, 7); fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: 7 + rnd(0, 6), s0: 6, s1: 2, spr: blue ? SP.streakB : SP.streak, add: 1, rot: a + PI / 2 }); }
-  SFX.tick(x);
+  SFX.tick(x, y);
 }
 function clearBullets(sc) { if (eb.length) SFX.cancel(); for (const b of eb) { fx.push({ x: b.x, y: b.y, vx: 0, vy: -1, t: 0, life: 16, s0: 5, s1: 18, spr: SP.fxBlue, add: 1 }); if (sc) addScore(100); } eb.length = 0; }
 
@@ -712,7 +593,7 @@ const ET = {
 };
 function enemy(type, x, y, o) {
   const e = Object.assign({ type, x, y, t: 0, flash: 0, rot: PI, ta: PI / 2 }, ET[type], o);
-  e.hp *= 1 + loop * .5; e.maxhp = e.hp; enemies.push(e); return e;
+  e.hp *= 1 + loop * .5; e.maxhp = e.hp; enemies.push(e); if (type === 'mid' || type === 'big') SFX.flyby(x); return e;
 }
 function aiZako(e) {
   const t = e.t, d = e.dir; let w = 0;
@@ -1129,7 +1010,7 @@ function drawSelect() {
 // ───────────────────────── 메인 루프
 function update() {
   frame++; musicTick(); engineTick(); let frozen = false;
-  if (hit('KeyM')) { muted = !muted; if (master) master.gain.value = muted ? 0 : .85; }
+  if (hit('KeyM')) { muted = !muted; SND.setMuted(muted); }
   const ok = hit('Enter', 'KeyZ', 'Space', 'Tap');
   if (state === 'title') {
     bgY = (bgY + 1) % BH; clY = (clY + 1.7) % 1024; music('title');
