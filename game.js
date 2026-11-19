@@ -525,7 +525,7 @@ function buildSprites() {
     dome(K, 0, 0, 12, 16, 8, 1, '#c98a2a', '#ffe9a0'); over(K, g => { const q = g.createRadialGradient(0, 0, 0, 0, 0, 16); q.addColorStop(0, 'rgba(255,250,210,.95)'); q.addColorStop(.5, 'rgba(255,200,80,.5)'); q.addColorStop(1, 'rgba(255,160,40,0)'); g.fillStyle = q; g.fillRect(-16, -16, 32, 32); });
     SP.b_wing = finish(K);
   }
-  SP.mech = [205, 95, 30, 350].map(mechK);
+  SP.mech = [205, 30, 185, 270, 350].map(mechK); // 스테이지별 색: 태평양·사막·북극·대서양·요새
   // ── 탄
   SP.eb = [orb(9, '#fff', '#ffe36a', '#ff4a10'), orb(13, '#fff', '#ffa6dc', '#e01f8c'), glow(11, 28, '#ffe36a', '#ff3a1f')];
   SP.pshot = glow(9, 26, '#fff7a8', '#ff9d1c');
@@ -836,6 +836,7 @@ function startStage() {
   ev = buildStage(stage); st = 0; phase = 'run'; pt = 0; boss = null; bomb = null;
   pb = []; eb = []; enemies = []; items = []; texts = []; decals = []; hitstop = 0; slow = 0; music('stage');
 }
+function mechSpr() { return SP.mech[stage % SP.mech.length]; }
 function newPlayer(keep) { return { x: W / 2, y: H + 40, pw: keep ? keep.pw : 0, bombs: keep ? keep.bombs : 2, inv: 200, ct: 0, sct: 0, charge: 0, alive: true, enter: 60, bank: 0, wing: 0, dead: 0 }; }
 function startGame() { PL = PLANES[sel]; stage = 0; loop = 0; score = 0; lives = 2; nextExt = 400000; P = newPlayer(); fx = []; startStage(); if (STORY && STORY.enabled) enterStory('briefing'); else state = 'play'; }
 // ── 스토리 연결 (story.js). 스토리 화면 동안 전투 업데이트는 멈추고 점수·생명·무기 상태는 그대로 유지된다.
@@ -1015,7 +1016,7 @@ function drawBoss(b) {
     for (const q of b.D.tur) { const tx = x + q[0], ty = y + q[1], ta = (P.alive ? aim(tx, ty) : PI / 2) + PI / 2; drawE(pk(SP.btur, ta), tx, ty, ta, b.flash, q[2]); }
   } else {
     for (const s of [-1, 1]) { ctx.globalCompositeOperation = 'lighter'; draw(SP.fxFire, x + s * 14, y - 46 - rnd(0, 6), 0, .45); ctx.globalCompositeOperation = 'source-over'; }
-    drawE(SP.mech[stage], x, y - (b.kick || 0), 0, b.flash);
+    drawE(mechSpr(), x, y - (b.kick || 0), 0, b.flash);
   }
 }
 function drawFx(f) {
@@ -1033,9 +1034,9 @@ function drawPlay() {
   for (const e of enemies) if (!e.air) drawEnemy(e);
   for (const it of items) if (it.kind === 'G') { const k = (it.t % 64) / 64, br = Math.max(0, Math.sin(k * PI)) ** 3; draw(SP.gold, it.x, it.y); if (br > .1) { ctx.globalAlpha = br; ctx.globalCompositeOperation = 'lighter'; draw(SP.fxFlash, it.x, it.y, 0, .25 + br * .3); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; } }
   for (const f of fx) if (!f.add && !f.top) drawFx(f);
-  if (stage < 3) { const y = clY % 1024; ctx.globalAlpha = .16; ctx.drawImage(CLOUDSH, 30, y - 1024 + 46); ctx.drawImage(CLOUDSH, 30, y + 46); ctx.globalAlpha = 1; drawClouds(.55); }
+  if (THEMES[stage].bg !== 3) { const y = clY % 1024; ctx.globalAlpha = .16; ctx.drawImage(CLOUDSH, 30, y - 1024 + 46); ctx.drawImage(CLOUDSH, 30, y + 46); ctx.globalAlpha = 1; drawClouds(.55); }
   // 그림자
-  for (const e of enemies) if (e.air) { if (e.type === 'boss') shadow(e.ph === 1 ? SP['b_' + e.kind] : SP.mech[stage], e.x + 14, e.y + 20, 0); else shadow(es(e), e.x, e.y, e.rot); }
+  for (const e of enemies) if (e.air) { if (e.type === 'boss') shadow(e.ph === 1 ? SP['b_' + e.kind] : mechSpr(), e.x + 14, e.y + 20, 0); else shadow(es(e), e.x, e.y, e.rot); }
   const ps = SP[PL.spr], vis = P.alive && (P.inv <= 0 || frame % 4 < 2);
   if (vis) shadow(ps, P.x, P.y, 0);
   if (bomb && bomb.type === 'carpet') { const by = H + 120 - bomb.t * 5; shadow(SP.b29, W / 2, by, 0, 1.3); }
@@ -1068,7 +1069,7 @@ function drawPlay() {
   for (const b of eb) draw(SP.eb[b.k], b.x, b.y, b.k === 2 ? b.a + PI / 2 : 0, 1 + Math.sin(frame * .55 + b.x * .13) * .13);
   for (const t of texts) { ctx.globalAlpha = Math.min(1, (60 - t.t) / 20); { const v = +t.s, pop = 1 + Math.max(0, 6 - t.t) * .12; txt(t.s, t.x, t.y - t.t * .6, (t.big ? 20 : v >= 10000 ? 14 : v >= 2000 ? 11 : 8) * pop, t.big ? '#7dff7d' : v >= 10000 ? '#fff' : '#ffe36a'); } ctx.globalAlpha = 1; }
   ctx.restore();
-  if (stage < 3) { const y = (clY * 2.3) % 1024; ctx.globalAlpha = .17; ctx.drawImage(CLOUD, -160, y - 1024, W * 1.6, 1024); ctx.drawImage(CLOUD, -160, y, W * 1.6, 1024); ctx.globalAlpha = 1; }
+  if (THEMES[stage].bg !== 3) { const y = (clY * 2.3) % 1024; ctx.globalAlpha = .17; ctx.drawImage(CLOUD, -160, y - 1024, W * 1.6, 1024); ctx.drawImage(CLOUD, -160, y, W * 1.6, 1024); ctx.globalAlpha = 1; }
   ctx.drawImage(VIG, 0, 0, W, H);
   if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${Math.min(.8, flash * .08)})`; ctx.fillRect(0, 0, W, H); flash--; }
   drawHUD();
@@ -1084,7 +1085,7 @@ function drawHUD() {
   if (boss && boss.st === 'fight') { const k = clamp(boss.hp / boss.maxhp, 0, 1); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(89, 49, 302, 8); ctx.fillStyle = boss.ph === 1 ? '#ffb02a' : '#ff3a4a'; ctx.fillRect(90, 50, 300 * k, 6); }
   if (phase === 'run' && st < 200) { const a = Math.min(1, st / 30, (200 - st) / 30); ctx.globalAlpha = a; txt(`STAGE ${stage + 1}`, W / 2, 260, 24, '#ffd75a'); txt(STORY ? STORY.missionTitle(stage) : THEMES[stage].name, W / 2, 296, 14); if (STORY) txt(THEMES[stage].name, W / 2, 318, 8, '#9fb4c8'); if (loop) txt(`LOOP ${loop + 1}`, W / 2, 344, 10, '#ff8a7a'); ctx.globalAlpha = 1; }
   if (phase === 'warn') { ctx.fillStyle = `rgba(255,0,0,${.12 + .1 * Math.sin(pt * .2)})`; ctx.fillRect(0, 0, W, H); if (STORY) STORY.drawBossIntro(stage, pt); else if (pt % 30 < 20) { txt('WARNING!!', W / 2, 280, 28, '#ff3a3a'); txt(`${THEMES[stage].msg} APPROACHING`, W / 2, 316, 9, '#ffd75a'); } }
-  if (phase === 'clear' && pt > 40) { txt('STAGE CLEAR', W / 2, 250, 24, '#ffd75a'); if (pt > 60) { txt(`BOMB  ${P.bombs} x 5000`, W / 2, 300, 10); txt(`PLANE ${lives} x 10000`, W / 2, 324, 10); } if (stage === THEMES.length - 1 && pt > 120) txt('ALL STAGES CLEAR! NEXT LOOP', W / 2, 360, 9, '#7dff7d'); }
+  if (phase === 'clear' && pt > 40) { txt('STAGE CLEAR', W / 2, 250, 24, '#ffd75a'); if (pt > 60) { txt(`BOMB  ${P.bombs} x 5000`, W / 2, 300, 10); txt(`PLANE ${lives} x 10000`, W / 2, 324, 10); } if (!STORY && stage === THEMES.length - 1 && pt > 120) txt('ALL STAGES CLEAR! NEXT LOOP', W / 2, 360, 9, '#7dff7d'); }
   if (STORY) STORY.drawRadio();
   if (!P.alive && lives === 0 && state === 'play') txt('LAST PLANE LOST', W / 2, 300, 12, '#ff5a4a');
 }
@@ -1182,6 +1183,6 @@ function tick(t) {
 buildSprites(); CLOUD = buildClouds(); CLOUDSH = tint(CLOUD, '#000'); BG[0] = buildBG(0);
 if (STORY) STORY.init({ ctx, drawBG, SFX });
 // 디버그/테스트용 훅
-window.__sky = { SP, SFX, get ac() { return AC && AC.state; }, get s() { return { state, stage, loop, score, lives, phase, st, enemies: enemies.length, eb: eb.length, pb: pb.length, pw: P && P.pw, boss: boss && { ph: boss.ph, st: boss.st, hp: boss.hp } }; }, god: v => god = v, get story() { return STORY; }, storyTest: (mode, n) => { stage = n || 0; if (!P) P = newPlayer(); enterStory(mode); }, clear: () => { phase = 'clear'; pt = 320; boss = null; }, skip: () => { st = 4490; ev = []; }, stage: n => { stage = n; startStage(); }, pw: n => P.pw = n, step: n => { for (let i = 0; i < n; i++) update(); }, hurtBoss: d => boss && hurt(boss, d) };
+window.__sky = { SP, SFX, get ac() { return AC && AC.state; }, get s() { return { state, stage, loop, score, lives, phase, st, enemies: enemies.length, eb: eb.length, pb: pb.length, pw: P && P.pw, boss: boss && { ph: boss.ph, st: boss.st, hp: boss.hp } }; }, god: v => god = v, get p() { return P && { x: P.x | 0, y: P.y | 0, alive: P.alive, enter: P.enter, inv: P.inv, dead: P.dead }; }, get pt() { return pt; }, get story() { return STORY; }, storyTest: (mode, n) => { stage = n || 0; P = newPlayer(P); startStage(); enterStory(mode); }, clear: () => { phase = 'clear'; pt = 320; boss = null; }, skip: () => { st = 4490; ev = []; }, stage: n => { stage = n; startStage(); }, pw: n => P.pw = n, step: n => { for (let i = 0; i < n; i++) update(); }, hurtBoss: d => boss && hurt(boss, d) };
 requestAnimationFrame(tick);
 })();
