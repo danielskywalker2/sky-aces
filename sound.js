@@ -588,6 +588,12 @@ function tick(o) {
 }
 function setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : .9; if (m) radioStatic(false); }
 
-window.IronSound = { unlock, SFX, music, tick, setMuted, stopRadio: () => radioStatic(false), get ready() { return rendered; }, get ctx() { return AC; }, _buf: BUF, _dbg: () => ({ q: queue.length, raw: Object.keys(RAW), next: queue[0] && queue[0][0] }),
+// 화면이 숨겨지거나(탭 전환·최소화·창 닫힘) 페이지를 떠나면 소리를 완전히 멈춘다
+let hiddenPause = false;
+function suspend(on) { if (!AC) return; hiddenPause = on; if (on) { radioStatic(false); AC.suspend().catch(() => {}); } else AC.resume().catch(() => {}); }
+document.addEventListener('visibilitychange', () => suspend(document.hidden));
+addEventListener('pagehide', () => suspend(true));
+addEventListener('pageshow', () => { if (!document.hidden) suspend(false); });
+window.IronSound = { suspend, unlock, SFX, music, tick, setMuted, stopRadio: () => radioStatic(false), get ready() { return rendered; }, get ctx() { return AC; }, _buf: BUF, _dbg: () => ({ q: queue.length, raw: Object.keys(RAW), next: queue[0] && queue[0][0] }),
   level() { if (!meter) return null; const d = new Float32Array(meter.fftSize); meter.getFloatTimeDomainData(d); let p = 0, q = 0; for (const v of d) { p = Math.max(p, Math.abs(v)); q += v * v; } return { peak: p, rms: Math.sqrt(q / d.length) }; } };
 })();

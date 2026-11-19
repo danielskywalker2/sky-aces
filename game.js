@@ -57,7 +57,8 @@ function unlockAudio() {
   }
 }
 // 홈 화면 앱에서 다른 앱 갔다 오면 오디오가 '중단' 상태가 되므로 돌아올 때 다시 깨운다
-document.addEventListener('visibilitychange', () => { if (!document.hidden && AC && AC.state !== 'running') AC.resume().catch(() => {}); });
+// 화면이 숨겨지면 플레이 중인 게임을 일시정지 (소리는 sound.js 가 멈춤). 돌아오면 오디오만 다시 깨우고 게임은 일시정지 상태로 둔다
+document.addEventListener('visibilitychange', () => { if (document.hidden) { if (state === 'play') state = 'pause'; } else if (AC && AC.state !== 'running') AC.resume().catch(() => {}); });
 cv.addEventListener('contextmenu', e => { e.preventDefault(); pressed.KeyX = 1; });
 const hit = (...c) => c.some(k => pressed[k]);
 const held = (...c) => c.some(k => keys[k]);
@@ -1088,6 +1089,6 @@ function tick(t) {
 buildSprites(); CLOUD = buildClouds(); CLOUDSH = tint(CLOUD, '#000'); BG[0] = buildBG(0);
 if (STORY) STORY.init({ ctx, drawBG, SFX });
 // 디버그/테스트용 훅
-window.__sky = { SP, SFX, get R() { return { kit, part, over, at, finish, spins, wingK, bodyK, finK, canopyK, dome, spinnerK, propBlur, poly, rr, disc, roundel, star5, mulberry, ptone, wingPath, bodyPath, fighter, bx }; }, get ac() { return AC && AC.state; }, get s() { return { state, stage, loop, score, lives, phase, st, enemies: enemies.length, eb: eb.length, pb: pb.length, pw: P && P.pw, boss: boss && { ph: boss.ph, st: boss.st, hp: boss.hp } }; }, god: v => god = v, get p() { return P && { x: P.x | 0, y: P.y | 0, alive: P.alive, enter: P.enter, inv: P.inv, dead: P.dead }; }, get pt() { return pt; }, get story() { return STORY; }, storyTest: (mode, n) => { stage = n || 0; P = newPlayer(P); startStage(); enterStory(mode); }, clear: () => { phase = 'clear'; pt = 320; boss = null; }, skip: () => { st = 4490; ev = []; }, stage: n => { stage = n; startStage(); }, pw: n => P.pw = n, step: n => { for (let i = 0; i < n; i++) update(); }, hurtBoss: d => boss && hurt(boss, d) };
+window.__sky = { SP, SFX, get R() { return { kit, part, over, at, finish, spins, wingK, bodyK, finK, canopyK, dome, spinnerK, propBlur, poly, rr, disc, roundel, star5, mulberry, ptone, wingPath, bodyPath, fighter, bx }; }, get ac() { return AC && AC.state; }, get s() { return { state, stage, loop, score, lives, phase, st, enemies: enemies.length, eb: eb.length, pb: pb.length, pw: P && P.pw, boss: boss && { ph: boss.ph, st: boss.st, hp: boss.hp } }; }, god: v => god = v, pause: () => { if (state === 'play') state = 'pause'; }, get p() { return P && { x: P.x | 0, y: P.y | 0, alive: P.alive, enter: P.enter, inv: P.inv, dead: P.dead }; }, get pt() { return pt; }, get story() { return STORY; }, storyTest: (mode, n) => { stage = n || 0; P = newPlayer(P); startStage(); enterStory(mode); }, clear: () => { phase = 'clear'; pt = 320; boss = null; }, skip: () => { st = 4490; ev = []; }, stage: n => { stage = n; startStage(); }, pw: n => P.pw = n, step: n => { for (let i = 0; i < n; i++) update(); }, hurtBoss: d => boss && hurt(boss, d) };
 requestAnimationFrame(tick);
 })();
