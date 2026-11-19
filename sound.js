@@ -131,6 +131,34 @@ function engineLoop(seed, fe = 36, len = 2, sr = S32) {
   }
   return norm(loopify([L, R], sr, F), .8);
 }
+// 제트 엔진: 터빈 고음 + 배기 굉음 (반복 루프)
+function jetLoop(seed, len = 2.5, sr = S32) {
+  const F = .4, d = len + F, L = buf(d, sr), R = buf(d, sr), n = L.length, r = rng(seed), wob = vnoise(r, 3, sr, n);
+  const rl = new BQ('lp', 1600, .6, sr), rr2 = new BQ('lp', 1700, .6, sr), bl = new BQ('bp', 380, .8, sr), br = new BQ('bp', 420, .8, sr), hl = new BQ('bp', 5200, 1.5, sr);
+  let p1 = 0, p2 = 0, pl = 0, pr = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, wl = r() * 2 - 1, wr = r() * 2 - 1, wb = 1 + (wob(i) - .5) * .006;
+    pl = (pl + .05 * wl) / 1.05; pr = (pr + .05 * wr) / 1.05;
+    p1 += 1150 * wb / sr; p2 += 2310 * wb / sr;
+    const whine = Math.sin(TAU * p1) * .1 + Math.sin(TAU * p2) * .05 + Math.sin(TAU * p1 * 3.02) * .02;
+    const roarL = rl.p(pl) * 2.2 + bl.p(wl) * .5, roarR = rr2.p(pr) * 2.2 + br.p(wr) * .5;
+    L[i] = roarL + whine + hl.p(wl) * .05; R[i] = roarR + whine * .9 + hl.p(wr) * .05;
+  }
+  return norm(loopify([L, R], sr, F), .8);
+}
+// 제트 시동: 터빈이 돌기 시작해 점화되며 굉음이 커짐
+function jetStart(seed) {
+  const sr = S32, d = 2.6, L = buf(d, sr), R = buf(d, sr), r = rng(seed), lp = new BQ('lp', 300, .6, sr), bp = new BQ('bp', 400, .8, sr);
+  let ph = 0, pk = 0;
+  for (let i = 0; i < L.length; i++) {
+    const t = i / sr, k = Math.min(1, t / 1.8), f = 180 + 970 * (1 - (1 - k) ** 2), w = r() * 2 - 1; ph += f / sr; pk = (pk + .05 * w) / 1.05;
+    if ((i & 63) === 0) lp.set(300 + 1500 * Math.max(0, (t - .7) / 1.4));
+    const ign = t > .75 ? Math.min(1, (t - .75) / .5) : 0, boom = t > .75 && t < .9 ? Math.exp(-(t - .75) / .04) * .6 : 0;
+    const x = (Math.sin(TAU * ph) * .3 + Math.sin(TAU * 2 * ph) * .12) * Math.min(1, t / .2) + (lp.p(pk) * 2.4 + bp.p(w) * .4) * ign + boom * w;
+    L[i] = R[i] = x * Math.min(1, (d - t) / .5);
+  }
+  reverb(L, R, sr, .2, .8, .5); return norm([L, R], .85);
+}
 // 적기 통과음 (도플러로 음높이가 높았다가 낮아짐)
 function flyby(seed) {
   const sr = S32, d = 3.4, L = buf(d, sr), R = buf(d, sr), r = rng(seed), lp = new BQ('lp', 900, .7, sr), wh = new BQ('bp', 900, .7, sr), pl = new BQ('lp', 600, .7, sr);
@@ -302,6 +330,7 @@ const DEFS = {
   tink: [41, 42, 43].map(s => () => tink(s, 0)).concat([() => tink(44, 1)]),
   clank: [51, 52].map(s => () => clank(s)),
   engine: [() => engineLoop(61, 36, 2)],
+  jet: [() => jetLoop(62)], jstart: [() => jetStart(63)],
   flyby: [71, 72].map(s => () => flyby(s)),
   siren: [() => siren()],
   drone: [() => heavyDrone(81)],
@@ -318,11 +347,11 @@ const DEFS = {
   i_brass: [() => brass(201)], i_strings: [() => strings(202)], i_cello: [() => cello(203)], i_timp: [() => timpani(204)],
   i_snare: [205, 206, 207].map(s => () => snare(s)), i_bd: [() => bassDrum(208)], i_cym: [() => cymbal(209)],
 };
-const SRATE = { engine: S32, flyby: S32, siren: S32, drone: S32, start: S32, spin: S32, dive: S32, thunder: S22, rOn: S22, rOff: S22, rStatic: S22, i_brass: S32, i_strings: S32, i_cello: S32, i_timp: S32, i_bd: S32, i_cym: S32 };
+const SRATE = { engine: S32, jet: S32, jstart: S32, flyby: S32, siren: S32, drone: S32, start: S32, spin: S32, dive: S32, thunder: S22, rOn: S22, rOff: S22, rStatic: S22, i_brass: S32, i_strings: S32, i_cello: S32, i_timp: S32, i_bd: S32, i_cym: S32 };
 const RAW = {}; // 이름 → [[L,R], ...]
 let rendered = false;
 // 로딩 직후 백그라운드에서 조금씩 렌더 (화면이 멈추지 않게)
-const order = ['sw', 'i_brass', 'i_strings', 'i_cello', 'i_timp', 'i_snare', 'i_cym', 'amb_ocean', 'gun', 'boomS', 'tink', 'egun', 'boomM', 'engine', 'rOn', 'rOff', 'type', 'ping', 'start', 'i_bd', 'boomL', 'clank', 'cannon', 'siren', 'drone', 'flyby', 'whoosh', 'spin', 'dive', 'shimmer', 'coin', 'coin2', 'rStatic', 'amb_desert', 'amb_arctic', 'amb_storm', 'amb_fortress', 'thunder'];
+const order = ['sw', 'i_brass', 'i_strings', 'i_cello', 'i_timp', 'i_snare', 'i_cym', 'amb_ocean', 'gun', 'boomS', 'tink', 'egun', 'boomM', 'jet', 'jstart', 'rOn', 'rOff', 'type', 'ping', 'i_bd', 'boomL', 'clank', 'cannon', 'siren', 'drone', 'flyby', 'whoosh', 'spin', 'dive', 'shimmer', 'coin', 'coin2', 'rStatic', 'amb_desert', 'amb_arctic', 'amb_storm', 'amb_fortress', 'thunder'];
 const queue = []; for (const k of order) DEFS[k].forEach((f, i) => queue.push([k, i, f]));
 function pump() {
   const t0 = performance.now();
@@ -419,7 +448,7 @@ const SFX = {
   cancel: () => play('shimmer', { vol: .35 }),
   ok: () => { play('sw', { vol: .6 }); play('ping', { vol: .18, rate: 1.5 }); },
   sel: () => play('sw', { vol: .45, jit: .1 }),
-  start: () => { play('start', { vol: .8, jit: 0 }); play('sw', { vol: .6 }); },
+  start: () => { play('jstart', { vol: .75, jit: 0 }); play('sw', { vol: .6 }); },
   ext: () => { fanfare([[72, 0, .16], [76, .16, .16], [79, .32, .16], [84, .48, .7]], .5); play('ping', { vol: .3, rate: 1.5, when: .48 }); },
   clear: () => { fanfare([[72, 0, .14], [72, .16, .14], [72, .32, .14], [76, .48, .3], [79, .8, .3], [76, 1.12, .14], [79, 1.28, .14], [84, 1.44, 1.3]], .55); inst('i_timp', 36, 1.44, 1.6, .5); inst('i_cym', 60, 1.44, 2.5, .3); [60, 64, 67].forEach(n => inst('i_strings', n, 1.44, 2.2, .2)); },
   over: () => { [[64, 0, .5], [60, .5, .5], [57, 1, .5], [53, 1.5, .5], [52, 2, 2]].forEach(([n, t, d]) => { inst('i_brass', n - 12, t, d, .4); inst('i_cello', n - 24, t, d, .4); }); [40, 47, 52].forEach(n => inst('i_strings', n, 2, 2.4, .2)); inst('i_timp', 28, 2, 2.2, .5); },
@@ -509,8 +538,8 @@ function tick(o) {
   if (!AC || (++tickN % 4)) return;
   const t = AC.currentTime; LP.x = o.px; LP.y = o.py;
   // 플레이어 엔진: 위로 가속하면 회전수 상승
-  if (!engV && BUF.engine) { engV = play('engine', { bus: engBus, loop: true, jit: 0, vol: 1 }); }
-  if (engV) { engBus.gain.setTargetAtTime(o.playing && !muted ? .32 : 0, t, .3); engV.s.playbackRate.setTargetAtTime(1 + o.throttle * .07, t, .25); }
+  if (!engV && BUF.jet) { engV = play('jet', { bus: engBus, loop: true, jit: 0, vol: 1 }); }
+  if (engV) { engBus.gain.setTargetAtTime(o.playing && !muted ? .32 : 0, t, .3); engV.s.playbackRate.setTargetAtTime(1 + o.throttle * .05, t, .3); }
   const want = o.state === 'title' || o.state === 'select' ? 'amb_ocean' : AMB[o.bg] || 'amb_ocean';
   setAmb(want, o.state === 'play' ? .55 : o.state === 'story' ? .35 : .3);
   // 전장 분위기: 먼 폭발, 대서양 천둥

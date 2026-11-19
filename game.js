@@ -291,31 +291,55 @@ function mechK(h) {
 function buildSprites() {
   // ── 플레이어 기체 (실사풍 렌더)
   const air = (w, h, o, ang, fn = fighter) => { const K = kit(w, h); fn(K, o); return ang === 'spin' ? spins(K, 16) : finish(K, ang || 0); };
-  {
-    const K = kit(68, 58), o = { c: '#b3bbc2', L: 46, S: 60, spec: .85, var: .36, seed: 2 };
-    wingK(K, o, 60, -5, 13, 3, .5, { rd: 2.6, ribs: 8, lights: 1, paint: g => { for (const s of [-1, 1]) { const x = s * 22, y = -3.2; g.fillStyle = '#e8e8e2'; g.fillRect(x - 6, y - 1.2, 12, 2.4); g.strokeStyle = '#1b315f'; g.lineWidth = .6; g.strokeRect(x - 6, y - 1.2, 12, 2.4); disc(g, x, y, 3.4, '#1b315f'); star5(g, x, y, 3, '#e8e8e2'); } } });
-    part(K, g => rr(g, -15.5, 19, 31, 5.6, 1.6), 1.3, 0, 1.4, o.spec, g => { g.fillStyle = o.c; g.fillRect(-99, -99, 198, 198); const R = mulberry(5); for (let i = 0; i < 6; i++) ptone(g, R, -15.5 + i * 5.2, 0, 5.2, 40, .3); }, v => { v.beginPath(); v.moveTo(-16, 22.5); v.lineTo(16, 22.5); v.stroke(); });
-    for (const s of [-1, 1]) at(K, s * 12, 1.5, () => {
-      bodyK(K, o, 44, 3.9, { nose: '#98a1a8', cowl: .2, inline: 1, tail: .45, bands: [['#e4e4de', .58, .03], ['#16171a', .61, .03], ['#e4e4de', .64, .03], ['#16171a', .67, .03], ['#e4e4de', .7, .03]] });
-      dome(K, 0, 1.5, 1.9, 3.6, 1.2, .6, '#2a2e33', '#7a5c3a');
-      for (const t of [-1, 1]) part(K, g => rr(g, t * 3.7 - 1.1, 9.5, 2.2, 5, .9), 1, .8, 1.8, .6, g => { g.fillStyle = '#8a949c'; g.fillRect(-99, -99, 198, 198); });
-      finK(K, o, 15, 2, 9, '#c2c9cf'); spinnerK(K, Object.assign({}, o, { spin: '#a8202a' }), -21.8, 1.9); over(K, g => propBlur(g, 0, -23, 8.6));
-    });
-    at(K, 0, -8, () => bodyK(K, o, 27, 4.9, { nose: '#98a1a8', cowl: .15, glare: '#39462e', tail: .55, z: 1.2 }));
-    over(K, g => { g.fillStyle = '#121315'; for (const x of [-1.7, -.6, .6, 1.7]) g.fillRect(x - .3, -24.6, .6, 3.4); });
-    canopyK(K, o, -8.5, 3, 5.8, 3, 5); SP.p38 = finish(K);
+  // 현대식 제트기 4종 (A 쌍발 제트 요격기 · B 후퇴익 제트 · C 델타익 요격기 · D 스텔스 다목적기)
+  const jetGlow = (g, x, y, r) => { const q = g.createRadialGradient(x, y, 0, x, y, r * 2.6); q.addColorStop(0, 'rgba(255,250,220,.95)'); q.addColorStop(.35, 'rgba(255,150,40,.7)'); q.addColorStop(1, 'rgba(255,80,20,0)'); g.fillStyle = q; g.beginPath(); g.ellipse(x, y + r * 1.2, r * 1.1, r * 2.6, 0, 0, TAU); g.fill(); disc(g, x, y, r * .75, '#ffd890'); };
+  const coldGlow = (g, x, y, r) => { const q = g.createRadialGradient(x, y, 0, x, y, r * 2.4); q.addColorStop(0, 'rgba(220,240,255,.95)'); q.addColorStop(.4, 'rgba(80,160,255,.6)'); q.addColorStop(1, 'rgba(40,90,255,0)'); g.fillStyle = q; g.beginPath(); g.ellipse(x, y + r, r, r * 2.4, 0, 0, TAU); g.fill(); disc(g, x, y, r * .7, '#bfe4ff'); };
+  const intake = (g, x, y, r) => { disc(g, x, y, r, '#4a5057'); disc(g, x, y, r * .68, '#07080a'); disc(g, x, y + r * .1, r * .25, '#2a2e33'); };
+  { // A. 쌍발 제트 요격기 — 날개 밑 엔진 2기, 은색 무광
+    const K = kit(66, 62), o = { c: '#9ea7ae', L: 50, S: 60, spec: .75, var: .26, seed: 21 };
+    wingK(K, o, 60, 1, 13, 7, .52, { rd: 2.2, ribs: 7, lights: 1, paint: g => { for (const s of [-1, 1]) roundel(g, s * 21, 5.2, 3.6, ['#1b315f', '#e8e8e2', '#1b315f']); } });
+    wingK(K, o, 22, 21, 7, 4, .55, { rd: 1.5, ribs: 2, th: 1.2 });
+    for (const s of [-1, 1]) at(K, s * 12.5, 2, () => bodyK(K, o, 24, 3.6, { tail: .7, nose: '#5a6068', cowl: .1, z: 2.2 }));
+    bodyK(K, o, 50, 4.4, { tail: .45, glare: '#3b4650', bands: [['#d8b020', .78, .03]] });
+    finK(K, o, 14, 1.8, 12, '#8f989f'); canopyK(K, o, -9, 2.8, 6, 2, 5);
+    over(K, g => { for (const s of [-1, 1]) { intake(g, s * 12.5, -9.4, 2.3); jetGlow(g, s * 12.5, 14.5, 1.8); } g.fillStyle = '#111'; for (const x of [-1.2, 1.2]) g.fillRect(x - .3, -26, .6, 3); });
+    SP.p38 = finish(K);
   }
-  SP.spit = air(62, 56, { L: 46, S: 56, c: '#4c5c3c', camo: '#6f5b41', seed: 3, spec: .14, var: .12, bw: 4.8, ell: 1, ch: 17, wy: -4, inline: 1, guns: [.3, .38], mark: ['#1b315f', '#e8e8e2', '#a8202a'], spin: '#c9c3a0', bands: [['#a9b896', .72, .04]], finc: '#8c2a2a', cy: -3, cl: 5.4, cf: 3 });
-  SP.zero = air(62, 54, { L: 44, S: 56, c: '#c4c6b9', spec: .32, var: .14, seed: 4, ch: 15, sw: 1.5, tp: .52, nose: '#15161a', cowl: .17, le: '#d8a818', guns: [.3], mark: ['#e8e8e2', '#a8202a', '#a8202a', '#a8202a', '#a8202a'], spin: '#8a8c88', bands: [['#a8202a', .74, .035]], cl: 6.6, cf: 4, cy: -2.5 });
-  {
-    const K = kit(62, 60), o = { c: '#34503c', camo: '#273d2e', seed: 11, L: 50, S: 56, spec: .2, var: .12 };
-    wingK(K, o, 56, 9, 16, 9, .42, { rd: 2, ribs: 7, lights: 1, le: '#d8a818', paint: g => { for (const s of [-1, 1]) roundel(g, s * 21.5, 14, 3.8, ['#e8e8e2', '#a8202a', '#a8202a', '#a8202a']); } });
-    wingK(K, o, 22, -18.5, 6, 1.5, .55, { rd: 1.5, ribs: 2, th: 1.2 });
-    for (const s of [-1, 1]) at(K, s * 15, 0, () => finK(K, o, 10, 2.6, 14, '#2a4332'));
-    bodyK(K, o, 50, 5.5, { glare: '#131c16', tail: .8, bands: [['#d8b020', .88, .03]] });
-    for (const s of [-1, 1]) part(K, g => { g.beginPath(); g.ellipse(s * 5.6, 7, 1.5, 3.4, 0, 0, TAU); }, 1.2, 2.5, 2.2, .2, g => { g.fillStyle = '#0c110e'; g.fillRect(-99, -99, 198, 198); });
-    over(K, g => { g.fillStyle = '#121315'; for (const x of [-1.8, -.6, .6, 1.8]) g.fillRect(x - .3, -27.6, .6, 3.6); });
-    canopyK(K, o, -5, 3.1, 6.8, 3, 5.4); spinnerK(K, Object.assign({}, o, { spin: '#5a3018' }), 24.6, 2.3); over(K, g => propBlur(g, 0, 26.4, 9.8)); SP.shin = finish(K);
+  { // B. 후퇴익 제트 전투기 — 기수 흡입구, 35° 후퇴익, 노란 띠
+    const K = kit(62, 62), o = { c: '#c9cfd4', L: 54, S: 54, spec: .9, var: .3, seed: 22 };
+    wingK(K, o, 54, 3, 15, 14, .45, { rd: 2, ribs: 6, lights: 1, tipc: '#d8b020', paint: g => { for (const s of [-1, 1]) roundel(g, s * 17, 9, 3.4, ['#1b315f', '#e8e8e2', '#a8202a']); } });
+    wingK(K, o, 22, 21, 7, 6, .5, { rd: 1.4, ribs: 2, th: 1.2, tipc: '#d8b020' });
+    bodyK(K, o, 54, 5.2, { tail: .55, glare: '#2c3238', bands: [['#d8b020', .2, .04], ['#16171a', .25, .02]] });
+    finK(K, o, 13, 1.8, 14, '#b9c0c6'); canopyK(K, o, -12, 2.9, 6.4, 1, 5.6);
+    over(K, g => { intake(g, 0, -24.6, 2.4); jetGlow(g, 0, 27, 2.2); g.fillStyle = '#111'; for (const x of [-2.4, 2.4]) g.fillRect(x - .3, -22.5, .6, 3); });
+    SP.spit = finish(K);
+  }
+  { // C. 델타익 요격기 — 삼각 날개 + 카나드, 측면 흡입구
+    const K = kit(60, 64), o = { c: '#8b939b', L: 56, S: 54, spec: .55, var: .2, seed: 23 };
+    part(K, g => poly(g, [0, -16, 27, 19, 24, 22, 6, 22, -6, 22, -24, 22, -27, 19]), 9, 0, 2.2, o.spec, fillc(o.c, g => {
+      const R = mulberry(9); for (let i = 0; i < 8; i++) ptone(g, R, -27 + i * 6.75, -20, 6.75, 44, .2);
+      for (const s of [-1, 1]) { disc(g, s * 13, 13, 3.6, '#e8e8e2'); disc(g, s * 13, 13, 2.6, '#1b315f'); star5(g, s * 13, 13, 2.2, '#e8e8e2'); }
+      g.fillStyle = 'rgba(0,0,0,.15)'; for (const s of [-1, 1]) { poly(g, [s * 8, 18, s * 22, 18, s * 24, 22, s * 6, 22]); g.fill(); }
+      g.fillStyle = '#d8b020'; for (const s of [-1, 1]) { poly(g, [s * 24.6, 17.2, s * 27, 19, s * 24, 22, s * 23, 21]); g.fill(); }
+    }), v => { for (const s of [-1, 1]) { v.beginPath(); v.moveTo(s * 2, -10); v.lineTo(s * 25, 19.5); v.stroke(); v.beginPath(); v.moveTo(s * 7, 17.5); v.lineTo(s * 23, 17.5); v.stroke(); v.globalAlpha = .4; for (const f of [.3, .55, .8]) { v.beginPath(); v.moveTo(s * 27 * f, -16 + 35 * f); v.lineTo(s * 27 * f, 22); v.stroke(); } v.globalAlpha = 1; } });
+    wingK(K, o, 18, -15, 5, 3, .5, { rd: 1.2, ribs: 1, th: 1 });
+    bodyK(K, o, 56, 4.3, { tail: .7, glare: '#30363c', c: '#7c848c' });
+    for (const s of [-1, 1]) part(K, g => { g.beginPath(); g.ellipse(s * 5.4, -6, 1.8, 4.4, 0, 0, TAU); }, 1.4, 2.4, 2, .3, fillc('#0c0e11'));
+    finK(K, o, 6, 1.6, 18, '#6f777f'); canopyK(K, o, -14, 2.6, 6, 1, 5.4);
+    over(K, g => jetGlow(g, 0, 27.6, 2.3));
+    SP.zero = finish(K);
+  }
+  { // D. 스텔스 다목적기 — 각진 동체, 쌍꼬리날개, 금빛 캐노피, 저시인성 회색
+    const K = kit(62, 66), o = { c: '#5c646d', L: 58, S: 56, spec: .35, var: .1, seed: 24 };
+    const lowvis = g => { const R = mulberry(4); for (let i = 0; i < 10; i++) ptone(g, R, -30 + i * 6, -40, 6, 80, .08); };
+    part(K, g => { g.beginPath(); for (const s of [-1, 1]) { g.moveTo(s * 7, -6); g.lineTo(s * 28, 10); g.lineTo(s * 28, 14.5); g.lineTo(s * 7.5, 13); g.closePath(); } }, 4, 0, 1.6, o.spec, fillc(o.c, g => { lowvis(g); for (const s of [-1, 1]) { g.strokeStyle = 'rgba(160,170,180,.55)'; g.lineWidth = .5; g.beginPath(); g.arc(s * 19, 9, 2.6, 0, TAU); g.stroke(); star5(g, s * 19, 9, 2.1, 'rgba(160,170,180,.55)'); } }), v => { for (const s of [-1, 1]) { v.globalAlpha = .6; v.beginPath(); v.moveTo(s * 9, 1); v.lineTo(s * 27, 13); v.stroke(); v.globalAlpha = 1; } });
+    part(K, g => { g.beginPath(); for (const s of [-1, 1]) { g.moveTo(s * 7.5, 16); g.lineTo(s * 17, 24); g.lineTo(s * 17, 27.5); g.lineTo(s * 7.5, 26); g.closePath(); } }, 2.5, 0, 1.3, o.spec, fillc('#545c64', lowvis));
+    part(K, g => poly(g, [0, -30, 4.5, -20, 7.5, -8, 8.5, 6, 8, 22, 4, 27, -4, 27, -8, 22, -8.5, 6, -7.5, -8, -4.5, -20]), 5, 1.2, 4.2, o.spec, fillc('#606871', g => { lowvis(g); g.fillStyle = 'rgba(0,0,0,.12)'; poly(g, [0, -30, 4.5, -20, 0, -14, -4.5, -20]); g.fill(); }), v => { v.beginPath(); v.moveTo(-6.5, -10); v.lineTo(6.5, -10); v.moveTo(-8, 8); v.lineTo(8, 8); v.moveTo(0, -2); v.lineTo(0, 20); v.stroke(); v.setLineDash([.4, 1]); v.beginPath(); v.moveTo(-5, -4); v.lineTo(-5, 18); v.moveTo(5, -4); v.lineTo(5, 18); v.stroke(); v.setLineDash([]); });
+    for (const s of [-1, 1]) part(K, g => poly(g, [s * 4.6, 10, s * 7.2, 12, s * 7.2, 22, s * 4.6, 23]), 1, 3.8, 3.4, .4, fillc('#4c535b'));
+    for (const s of [-1, 1]) part(K, g => poly(g, [s * 4.5, -11, s * 8, -6, s * 7.6, -3, s * 4.8, -6]), 1, 2.6, 2, .3, fillc('#0c0e11'));
+    part(K, g => { g.beginPath(); g.ellipse(0, -15, 2.6, 6.6, 0, 0, TAU); }, 2.6, 4.6, 2.8, 1, g => { const q = g.createLinearGradient(-3, -21, 3, -9); q.addColorStop(0, '#d9b15a'); q.addColorStop(.45, '#6b4e1e'); q.addColorStop(1, '#21180a'); g.fillStyle = q; g.fillRect(-99, -99, 198, 198); });
+    over(K, g => { for (const s of [-1, 1]) { g.fillStyle = '#1c1f23'; g.fillRect(s * 2.8 - 1.6, 25.5, 3.2, 1.8); coldGlow(g, s * 2.8, 27, 1.5); } });
+    SP.shin = finish(K);
   }
   // ── 적 기체 (선회 각도별로 조명을 다시 계산한 16방향)
   SP.zako = air(38, 36, { L: 28, S: 31, c: '#5f7541', camo: '#42562e', seed: 5, spec: .18, var: .12, nose: '#c9a426', cowl: .16, guns: [.32], mark: ['#e8e8e2', '#a8202a', '#a8202a'], tailc: '#c9a426' }, 'spin');
@@ -531,13 +555,13 @@ function buildClouds() {
 
 // ───────────────────────── 기체 정의
 const PLANES = [
-  { name: 'P-38 LIGHTNING', spr: 'p38', speed: 4.2, dmg: 1, sub: 'homing', chg: 'lance', bomb: 'carpet', shot: 'pshot', ko: ['유도 미사일', '관통 랜스', '융단 폭격'],
+  { name: 'TWIN COMET', spr: 'p38', exh: [[-12.5, 15], [12.5, 15]], speed: 4.2, dmg: 1, sub: 'homing', chg: 'lance', bomb: 'carpet', shot: 'pshot', ko: ['유도 미사일', '관통 랜스', '융단 폭격'],
     shots: [[[-5, 0], [5, 0]], [[-10, 0], [0, 0], [10, 0]], [[-15, 0], [-5, 0], [5, 0], [15, 0]], [[-15, 0], [-5, 0], [5, 0], [15, 0], [-19, -.14], [19, .14]]] },
-  { name: 'SPITFIRE', spr: 'spit', speed: 3.9, dmg: 1.25, sub: 'rocket', chg: 'fireball', bomb: 'pillar', shot: 'pshot', ko: ['직진 로켓', '대형 화염탄', '섬광 기둥'],
+  { name: 'ARROWHEAD', spr: 'spit', exh: [[0, 27]], speed: 3.9, dmg: 1.25, sub: 'rocket', chg: 'fireball', bomb: 'pillar', shot: 'pshot', ko: ['직진 로켓', '대형 화염탄', '섬광 기둥'],
     shots: [[[-4, 0], [4, 0]], [[-8, 0], [0, 0], [8, 0]], [[-12, 0], [-4, 0], [4, 0], [12, 0]], [[-16, 0], [-8, 0], [0, 0], [8, 0], [16, 0]]] },
-  { name: 'ZERO FIGHTER', spr: 'zero', speed: 4.7, dmg: .9, sub: 'side', chg: 'wingmen', bomb: 'carpet', shot: 'pshotB', ko: ['확산 측면탄', '편대 호위기', '융단 폭격'],
+  { name: 'DELTA LANCE', spr: 'zero', exh: [[0, 28]], speed: 4.7, dmg: .9, sub: 'side', chg: 'wingmen', bomb: 'carpet', shot: 'pshotB', ko: ['확산 측면탄', '편대 호위기', '융단 폭격'],
     shots: [[[-5, 0], [5, 0]], [[-5, 0], [5, 0], [-9, -.16], [9, .16]], [[-5, 0], [5, 0], [-9, -.16], [9, .16], [-12, -.32], [12, .32]], [[-8, 0], [0, 0], [8, 0], [-10, -.16], [10, .16], [-13, -.32], [13, .32]]] },
-  { name: 'SHINDEN', spr: 'shin', speed: 3.6, dmg: 1.5, sub: 'blade', chg: 'wave', bomb: 'pillar', shot: 'pshotB', ko: ['관통 칼날', '초승달 파동', '섬광 기둥'],
+  { name: 'SHADOW FALCON', spr: 'shin', exh: [[-2.8, 26], [2.8, 26]], speed: 3.6, dmg: 1.5, sub: 'blade', chg: 'wave', bomb: 'pillar', shot: 'pshotB', ko: ['관통 칼날', '초승달 파동', '섬광 기둥'],
     shots: [[[-4, 0], [4, 0]], [[-7, 0], [0, 0], [7, 0]], [[-10, 0], [-3.5, 0], [3.5, 0], [10, 0]], [[-13, 0], [-6.5, 0], [0, 0], [6.5, 0], [13, 0]]] },
 ];
 
@@ -939,7 +963,7 @@ function drawPlay() {
   if (vis) {
     if (P.wing > 0 && (P.wing > 50 || frame % 4 < 2)) for (const s of [-1, 1]) draw(ps, P.x + s * 36, P.y + 10, 0, .62);
     ctx.globalCompositeOperation = 'lighter'; const fl = .7 + Math.random() * .6;
-    for (const ex of (PL.spr === 'p38' ? [-12, 12] : [0])) draw(SP.flame, P.x + ex, P.y + 24 + 7 * fl, 0, fl);
+    for (const [ex, ey] of PL.exh) draw(SP.flame, P.x + ex, P.y + ey + 7 * fl, 0, fl * (PL.exh.length > 1 ? .8 : 1));
     if (P.mz > 0) { P.mz--; for (const [dx] of PL.shots[P.pw]) draw(SP.fxFlash, P.x + dx, P.y - 25, 0, .16 + Math.random() * .14); }
     ctx.globalCompositeOperation = 'source-over';
     draw(ps, P.x, P.y, 0, 1, 1 - Math.abs(P.bank) * .22);
@@ -1064,6 +1088,6 @@ function tick(t) {
 buildSprites(); CLOUD = buildClouds(); CLOUDSH = tint(CLOUD, '#000'); BG[0] = buildBG(0);
 if (STORY) STORY.init({ ctx, drawBG, SFX });
 // 디버그/테스트용 훅
-window.__sky = { SP, SFX, get ac() { return AC && AC.state; }, get s() { return { state, stage, loop, score, lives, phase, st, enemies: enemies.length, eb: eb.length, pb: pb.length, pw: P && P.pw, boss: boss && { ph: boss.ph, st: boss.st, hp: boss.hp } }; }, god: v => god = v, get p() { return P && { x: P.x | 0, y: P.y | 0, alive: P.alive, enter: P.enter, inv: P.inv, dead: P.dead }; }, get pt() { return pt; }, get story() { return STORY; }, storyTest: (mode, n) => { stage = n || 0; P = newPlayer(P); startStage(); enterStory(mode); }, clear: () => { phase = 'clear'; pt = 320; boss = null; }, skip: () => { st = 4490; ev = []; }, stage: n => { stage = n; startStage(); }, pw: n => P.pw = n, step: n => { for (let i = 0; i < n; i++) update(); }, hurtBoss: d => boss && hurt(boss, d) };
+window.__sky = { SP, SFX, get R() { return { kit, part, over, at, finish, spins, wingK, bodyK, finK, canopyK, dome, spinnerK, propBlur, poly, rr, disc, roundel, star5, mulberry, ptone, wingPath, bodyPath, fighter, bx }; }, get ac() { return AC && AC.state; }, get s() { return { state, stage, loop, score, lives, phase, st, enemies: enemies.length, eb: eb.length, pb: pb.length, pw: P && P.pw, boss: boss && { ph: boss.ph, st: boss.st, hp: boss.hp } }; }, god: v => god = v, get p() { return P && { x: P.x | 0, y: P.y | 0, alive: P.alive, enter: P.enter, inv: P.inv, dead: P.dead }; }, get pt() { return pt; }, get story() { return STORY; }, storyTest: (mode, n) => { stage = n || 0; P = newPlayer(P); startStage(); enterStory(mode); }, clear: () => { phase = 'clear'; pt = 320; boss = null; }, skip: () => { st = 4490; ev = []; }, stage: n => { stage = n; startStage(); }, pw: n => P.pw = n, step: n => { for (let i = 0; i < n; i++) update(); }, hurtBoss: d => boss && hurt(boss, d) };
 requestAnimationFrame(tick);
 })();
